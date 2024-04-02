@@ -28,16 +28,22 @@ def main():
     # Load and preprocess the data
     print("Tabulating TREC data...")
     trec_df = trec_csv_from_dir(training_data_dir, trec_formatted_files)
-    print(trec_df.size)
     print("Data loaded successfully.")
 
     # print("Merging data...")
-    merged_data = merge_data(trec_df, training_rels_consenso_path)
-    print(f"Data merged successfully. Merged data size is: {merged_data.size}")
+    trec_df = merge_data(trec_df, training_rels_consenso_path)
+    print(f"Data merged successfully. Merged data size is: {trec_df.size}")
+
+    # Remove data with no text
+    trec_df = clean_text(trec_df)
+
+    # Create a predominant polarity column, then a self referential flag column, then filter the data for negative and self referential sentences
+    trec_df = persons_and_emotions(trec_df)
+
 
     # # Generate embeddings
     # # print("Generating embeddings...")
-    # embeddings = generate_embeddings(merged_data)
+    embeddings = generate_embeddings(trec_df)
     # # print("Embeddings generated successfully.")
 
     print("Program completed.")

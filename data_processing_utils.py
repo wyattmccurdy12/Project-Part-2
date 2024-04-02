@@ -4,6 +4,8 @@ import pandas as pd
 import random 
 from tqdm import tqdm
 import nltk
+nltk.download('vader_lexicon')
+nltk.download('averaged_perceptron_tagger')
 import yake
 from nltk.tokenize import sent_tokenize
 from nltk.sentiment import SentimentIntensityAnalyzer
@@ -80,6 +82,58 @@ def merge_dataframes(trec_df, training_rels_consenso):
     print(f'Size of merged_data (trec_df and merged_data): {merged_data.shape[0]}')
 
     return merged_data
+
+
+def clean_text(df, outname='merged_clean_data.csv'):
+    """
+    Remove rows with no text or with empty strings in the 'TEXT' column, and remove duplicate rows based on the 'TEXT' column.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame to clean.
+
+    Returns:
+        pandas.DataFrame: The cleaned DataFrame.
+    """
+    if os.path.exists(outname):
+        print(f"Loading data from {outname}...")
+        df = pd.read_csv(outname)
+    else:
+        print("Removing data with no text...")
+        df = df.dropna(subset=['TEXT'])
+        df = df[df['TEXT'] != '']
+        print("Removing duplicate rows...")
+        df = df.drop_duplicates(subset=['TEXT'])
+        df.to_csv(outname, index=False)
+        print(f"Data cleaned and saved to {outname}.")
+    return df
+
+
+def persons_and_emotions(df, outname='persons_and_emotions.csv'):
+    """
+    Create a predominant polarity column, a self referential flag column, and filter the data for negative and self referential sentences.
+
+    Args:
+        df (pandas.DataFrame): The DataFrame to process.
+
+    Returns:
+        pandas.DataFrame: The processed DataFrame.
+    """
+    if os.path.exists(outname):
+        print(f"Loading data from {outname}...")
+        df = pd.read_csv(outname)
+    else:
+        print("Creating predominant polarity column...")
+        df['polarity'] = df['TEXT'].apply(extract_polarity)
+        print("Creating self reference flags...")
+        df['self_ref'] = df['TEXT'].apply(flag_self_referential)
+        print("Filtering to only include negative and self referential posts...")
+        df = df[(df['polarity'] == 'neg' ) & (df['self_ref'] == 1)]
+
+        # Save filter flagged data to 'persons_and_emotions.csv'
+        df.to_csv(outname, index=False)
+        print(f"Data processed and saved to {outname}.")
+    return df
+
 
 ## END PREPROCESSING FUNCTIONS ##
 ############################################################################################
@@ -169,17 +223,16 @@ def extract_polarity(text):
         dict: A dictionary containing the polarity scores. Keys: 'neg', 'neu', 'pos', 'compound'. 
                                                     negative, neutral, positive, and compound scores.
     """
+
     sia = SentimentIntensityAnalyzer()
     polarity = sia.polarity_scores(text)
 
     # Get the maximum polarity score, return it and its corresponding key in a tuple
-    max_score = 0
-    for key, value in polarity.items():
-        if value > max_score:
-            max_score = value
-            max_score_key = key
+    pp = polarity.pop('compound') # remove compound score. remains unused
+    keys, values = zip(*polarity.items())
+    max_key = keys[values.index(max(values))]
 
-    return max_score_key
+    return max_key
 
 def flag_self_referential(text):
     """
@@ -189,22 +242,15 @@ def flag_self_referential(text):
         text (str): The text to analyze.
     
     Returns:
-        list: A list of tuples, where each tuple contains a sentence and a flag indicating whether the sentence is self-referential.
+        int: 1 if the text is self-referential, 0 otherwise.
     """
-    sentences = sent_tokenize(text)
-    # Tokenize each sentence
-    tokenized_sentences = [nltk.word_tokenize(sentence) for sentence in sentences]
-    # Assign part of speech tags to the tokens
-    pos_tagged_sentences = [nltk.pos_tag(tokens) for tokens in tokenized_sentences]
+    tokens = nltk.word_tokenize(text)
+    pos_tags = nltk.pos_tag(tokens)
 
-    # Flag self-referential sentences
-    self_referential_sentences = []
-    for sentence, pos_tags in zip(sentences, pos_tagged_sentences):
-        # Check if the sentence is self-referential
-        is_self_referential = any(tag == 'PRP' for word, tag in pos_tags)
-        self_referential_sentences.append((sentence, int(is_self_referential)))
+    # Check if the text is self-referential
+    is_self_referential = any(tag == 'PRP' for word, tag in pos_tags)
 
-    return self_referential_sentences
+    return int(is_self_referential)
 
 def filter_positive_and_neutral_sents(sentences):
     """
@@ -227,6 +273,9 @@ def filter_positive_and_neutral_sents(sentences):
 
 ## VECTOR EMBEDDING FUNCTIONS ##
 ## Generate vector embeddings
+
+
+
 def generate_embeddings(text):
     """
     Generate vector embeddings for a text using the all-MiniLM-L6-v2 pretrained model.
