@@ -41,10 +41,7 @@ def main():
     trec_df = persons_and_emotions(trec_df)
 
 
-    # # Generate embeddings
-    # # print("Generating embeddings...")
-    embeddings = generate_embeddings(trec_df)
-    # # print("Embeddings generated successfully.")
+    trec_df['EMB'] = trec_df['TEXT'].apply(generate_embeddings)
 
     print("Program completed.")
 
