@@ -19,7 +19,7 @@ def main():
     training_qrels_majority_2 = 'g_qrels_majority_2.csv'
     training_rels_consenso = 'g_rels_consenso.csv'
     trec_formatted_files = os.path.join(training_data_dir, 'new_data/')
-    print(os.listdir(trec_formatted_files))
+    # print(os.listdir(trec_formatted_files))
 
     # Load and preprocess the data
     print("Tabulating TREC data...")
