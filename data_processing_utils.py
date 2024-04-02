@@ -38,7 +38,7 @@ def process_trec_file(directory, filename):
     return df
 
 
-def process_trec_dir(directory, sample=True, sample_size=100):
+def process_trec_dir(directory, sample=False, sample_size=100):
     """
     Process all TREC files in a directory and return a concatenated DataFrame.
 
@@ -83,6 +83,77 @@ def merge_dataframes(trec_df, training_qrels_majority_2, training_rels_consenso)
 
 ## END PREPROCESSING FUNCTIONS ##
 ############################################################################################
+
+## Functions pasted from main - modularization functions ##
+
+def trec_csv_from_dir(training_data_dir, trec_folder_name, output_csv_path, create_all_new):
+    """
+    Load and preprocess TREC data from the directory and save it to a CSV file. (if not exists already)
+
+    Parameters:
+    - trec_csv1_path (str): The path to the TREC CSV file. (output)
+    - training_data_dir (str): The directory containing the TREC formatted data.
+    - create_all_new (bool): If True, the training data will be processed again and saved as a new CSV file. (will replace)
+
+    Returns:
+    - trec_df (pandas.DataFrame): The loaded or processed TREC data as a DataFrame.
+    """
+
+    trec_data_path = os.path.join(training_data_dir, trec_folder_name)
+
+    if (not os.path.exists(output_csv_path)) or create_all_new:
+        trec_df = process_trec_dir(trec_data_path, sample=False)
+        trec_df.to_csv(output_csv_path, index=False)
+    else:
+        print('Reading in trec processed data...')
+        trec_df = pd.read_csv(output_csv_path)
+    return trec_df
+
+def merge_data(trec_csv1merged_path, trec_df, training_qrels_majority_2, training_rels_consenso, create_all_new):
+    """
+    Merge the given dataframes and save the merged data to a CSV file. (if not exists already)
+
+    Args:
+        trec_csv1merged_path (str): The file path to save the merged data CSV file.
+        trec_df (pandas.DataFrame): The dataframe to be merged.
+        training_qrels_majority_2 (pandas.DataFrame): The dataframe containing training qrels majority 2 data.
+        training_rels_consenso (pandas.DataFrame): The dataframe containing training rels consenso data.
+        create_all_new (bool): If True, create a new merged data file even if it already exists.
+
+    Returns:
+        pandas.DataFrame: The merged dataframe.
+    """
+    if not os.path.exists(trec_csv1merged_path) or create_all_new:
+        merged_data = merge_dataframes(trec_df, training_qrels_majority_2, training_rels_consenso)
+        merged_data.to_csv(trec_csv1merged_path, index=False)
+        print('Data merged')
+    else:
+        print("Reading in merged data...")
+        merged_data = pd.read_csv(trec_csv1merged_path)
+    return merged_data
+
+def preprocess_data(merged_data):
+    '''
+    Preprocess the data by extracting the polarity of the text and flagging self-referential text.
+    Add these factors as new columns.
+
+    Parameters:
+    - merged_data: pandas DataFrame
+        The input data containing the text column.
+
+    Returns:
+    - preprocessed_data: pandas DataFrame
+        The preprocessed data with additional columns for polarity and self-reference flags.
+    '''
+    # First, drop rows that are NAN in the TEXT column
+    merged_data = merged_data.dropna(subset=['TEXT'])
+
+    merged_data['polarity'] = merged_data['TEXT'].apply(extract_polarity)
+    # merged_data['self_reference'] = merged_data['TEXT'].apply(flag_self_referential)
+    return merged_data
+
+## END Functions pasted from main - modularization functions ##
+
 ## LANGUAGE PROCESSING FUNCTIONS ##
 
 def extract_polarity(text):
