@@ -61,22 +61,22 @@ def process_trec_dir(directory, sample=False, sample_size=100):
     return result_df
 
 
-def merge_dataframes(trec_df, training_qrels_majority_2, training_rels_consenso):
+def merge_dataframes(trec_df, training_rels_consenso):
     # Load the ancillary data
-    qrels = pd.read_csv(training_qrels_majority_2)
-    rels = pd.read_csv(training_rels_consenso)
+    # qrels = pd.read_csv(training_qrels_majority_2)
+    # rels = pd.read_csv(training_rels_consenso)
 
     # Print the size of each dataframe
-    print(f'Size of qrels: {qrels.shape[0]}')
-    print(f'Size of rels: {rels.shape[0]}')
+    # print(f'Size of qrels: {qrels.shape[0]}')
+    print(f'Size of rels: {training_rels_consenso.shape[0]}')
     print(f'Size of trec_df: {trec_df.shape[0]}')
 
     # Merge qrels and rels on docid
-    merged_data = pd.merge(qrels, rels, on='docid', how='inner')
-    print(f'Size of merged_data (qrels and rels): {merged_data.shape[0]}')
+    # merged_data = pd.merge(qrels, rels, on='docid', how='inner')
+    # print(f'Size of merged_data (qrels and rels): {merged_data.shape[0]}')
 
     # Merge trec_df and merged_data on docid
-    merged_data = pd.merge(trec_df, merged_data, on='docid', how='inner')
+    merged_data = pd.merge(trec_df, training_rels_consenso, on='docid', how='inner')
     print(f'Size of merged_data (trec_df and merged_data): {merged_data.shape[0]}')
 
     return merged_data
@@ -110,7 +110,7 @@ def trec_csv_from_dir(training_data_dir, trec_folder_name, output_csv_path='tabu
         return trec_df
 
 
-def merge_data(trec_df, training_qrels_majority_2, training_rels_consenso, out_merged_csv_path='merged_data.csv', create_all_new=False):
+def merge_data(trec_df, training_rels_consenso_path, out_merged_csv_path='merged_data.csv'):
     """
     Merge the given dataframes and save the merged data to a CSV file. (if not exists already)
 
@@ -119,13 +119,14 @@ def merge_data(trec_df, training_qrels_majority_2, training_rels_consenso, out_m
         trec_df (pandas.DataFrame): The dataframe to be merged.
         training_qrels_majority_2 (pandas.DataFrame): The dataframe containing training qrels majority 2 data.
         training_rels_consenso (pandas.DataFrame): The dataframe containing training rels consenso data.
-        create_all_new (bool): If True, create a new merged data file even if it already exists.
 
     Returns:
         pandas.DataFrame: The merged dataframe.
     """
-    if not os.path.exists(out_merged_csv_path) or create_all_new:
-        merged_data = merge_dataframes(trec_df, training_qrels_majority_2, training_rels_consenso)
+    
+    if not os.path.exists(out_merged_csv_path):
+        training_rels_consenso = pd.read_csv(training_rels_consenso_path)
+        merged_data = merge_dataframes(trec_df,  training_rels_consenso)
         merged_data.to_csv(out_merged_csv_path, index=False)
         print('Data merged')
     else:

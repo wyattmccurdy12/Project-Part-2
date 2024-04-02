@@ -19,19 +19,21 @@ def main():
     print(f"Training data directory is set to: {training_data_dir}")
 
     training_qrels_majority_2 = 'g_qrels_majority_2.csv'
-    training_rels_consenso = 'g_rels_consenso.csv'
+    training_qrels_majority_2 = os.path.join(training_data_dir, training_qrels_majority_2)
+    training_rels_consenso_name = 'g_rels_consenso.csv'
+    training_rels_consenso_path = os.path.join(training_data_dir, training_rels_consenso_name)
     trec_formatted_files = os.path.join(training_data_dir, 'new_data/')
     # print(os.listdir(trec_formatted_files))
 
     # Load and preprocess the data
     print("Tabulating TREC data...")
-    trec_df = trec_csv_from_dir(training_data_dir, trec_formatted_files, 'tabulated_trec_data.csv', create_all_new)
-    print(trec_df)
+    trec_df = trec_csv_from_dir(training_data_dir, trec_formatted_files)
+    print(trec_df.size)
     print("Data loaded successfully.")
 
-    # # print("Merging data...")
-    # merged_data = merge_data('merged_data_v1.csv', trec_df, training_qrels_majority_2, training_rels_consenso, create_all_new)
-    # # print("Data merged successfully.")
+    # print("Merging data...")
+    merged_data = merge_data(trec_df, training_rels_consenso_path)
+    print(f"Data merged successfully. Merged data size is: {merged_data.size}")
 
     # # Generate embeddings
     # # print("Generating embeddings...")
