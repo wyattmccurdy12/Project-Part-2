@@ -86,7 +86,7 @@ def merge_dataframes(trec_df, training_qrels_majority_2, training_rels_consenso)
 
 ## Functions pasted from main - modularization functions ##
 
-def trec_csv_from_dir(training_data_dir, trec_folder_name, output_csv_path, create_all_new):
+def trec_csv_from_dir(training_data_dir, trec_folder_name, output_csv_path='tabulated_trec_data.csv'):
     """
     Load and preprocess TREC data from the directory and save it to a CSV file. (if not exists already)
 
@@ -98,18 +98,19 @@ def trec_csv_from_dir(training_data_dir, trec_folder_name, output_csv_path, crea
     Returns:
     - trec_df (pandas.DataFrame): The loaded or processed TREC data as a DataFrame.
     """
-
-    trec_data_path = os.path.join(training_data_dir, trec_folder_name)
-
-    if (not os.path.exists(output_csv_path)) or create_all_new:
-        trec_df = process_trec_dir(trec_data_path, sample=False)
-        trec_df.to_csv(output_csv_path, index=False)
-    else:
+    if os.path.exists(output_csv_path):
         print('Reading in trec processed data...')
         trec_df = pd.read_csv(output_csv_path)
-    return trec_df
+        return trec_df
+    else:
+        print('Tabulating TREC data...')
+        trec_data_path = os.path.join(training_data_dir, trec_folder_name)
+        trec_df = process_trec_dir(trec_data_path, sample=False)
+        trec_df.to_csv(output_csv_path, index=False)
+        return trec_df
 
-def merge_data(trec_csv1merged_path, trec_df, training_qrels_majority_2, training_rels_consenso, create_all_new):
+
+def merge_data(trec_df, training_qrels_majority_2, training_rels_consenso, out_merged_csv_path='merged_data.csv', create_all_new=False):
     """
     Merge the given dataframes and save the merged data to a CSV file. (if not exists already)
 
@@ -123,13 +124,13 @@ def merge_data(trec_csv1merged_path, trec_df, training_qrels_majority_2, trainin
     Returns:
         pandas.DataFrame: The merged dataframe.
     """
-    if not os.path.exists(trec_csv1merged_path) or create_all_new:
+    if not os.path.exists(out_merged_csv_path) or create_all_new:
         merged_data = merge_dataframes(trec_df, training_qrels_majority_2, training_rels_consenso)
-        merged_data.to_csv(trec_csv1merged_path, index=False)
+        merged_data.to_csv(out_merged_csv_path, index=False)
         print('Data merged')
     else:
         print("Reading in merged data...")
-        merged_data = pd.read_csv(trec_csv1merged_path)
+        merged_data = pd.read_csv(out_merged_csv_path)
     return merged_data
 
 def preprocess_data(merged_data):

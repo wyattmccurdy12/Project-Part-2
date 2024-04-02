@@ -4,6 +4,8 @@ from data_processing_utils import *
 
 
 def main():
+
+
     print("Starting the program...")
 
     # Set up the paths
@@ -24,16 +26,17 @@ def main():
     # Load and preprocess the data
     print("Tabulating TREC data...")
     trec_df = trec_csv_from_dir(training_data_dir, trec_formatted_files, 'tabulated_trec_data.csv', create_all_new)
+    print(trec_df)
     print("Data loaded successfully.")
 
-    # print("Merging data...")
+    # # print("Merging data...")
     # merged_data = merge_data('merged_data_v1.csv', trec_df, training_qrels_majority_2, training_rels_consenso, create_all_new)
-    # print("Data merged successfully.")
+    # # print("Data merged successfully.")
 
-    # Generate embeddings
-    # print("Generating embeddings...")
+    # # Generate embeddings
+    # # print("Generating embeddings...")
     # embeddings = generate_embeddings(merged_data)
-    # print("Embeddings generated successfully.")
+    # # print("Embeddings generated successfully.")
 
     print("Program completed.")
 
