@@ -3671,3 +3671,4 @@ augmented_exploded_embeddings.npy
 augmented_exploded.csv
 embeddings.npy
 __pycache__/data_processing_utils.cpython-38.pyc
+cosine_similarities.csv
