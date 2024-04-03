@@ -1,7 +1,10 @@
 import os
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 from data_processing_utils import *
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 def main():
     """
@@ -57,6 +60,43 @@ def main():
     # saved as "augmented_exploded.csv" and "augmented_exploded_embeddings.npy"
     aug_answers_df = process_augmented_data('augmented_answer_sets.txt', 'augmented_answers.csv',
                                             'augmented_exploded.csv', 'augmented_exploded_embeddings.npy')
+
+
+    '''
+    Vector embeddings have been generated for the TREC data and the augmented data.
+    The goal is to take the cosine similarity between the embeddings of the TREC data and the augmented data.
+    In the augmented data, there are 21 questions, and each question has 4 severity levels for the answers.
+    Embeddings associated with severity levels 2, 3, and 4 are considered indicitative symptoms associated with the question.
+    Therefore, a higher cosine similarity between text from a user generated post and 
+    embeddings associated with symptoms will give that post a higher ranking for that particular question.
+    From the user post data, the text comes from the TEXT column and the indicator for whether or not 
+    the post has been associated with the question comes from the 'rel' column [0,1].
+    We will split the data into training and validation, and evaluate the accuracy of our cosine similarity method.
+    '''
+    print("Starting the cosine similarity rank calculation...")
+
+    # Split the data into training and validation
+    train_df, val_df = train_test_split(trec_df, test_size=0.2, random_state=42)
+
+    # Create a new column for the cosine similarity rank
+    train_df['cosine_similarity_rank'] = 0
+
+    for index, row in train_df.iterrows():
+        # Get the trec_embedding for the current row
+        trec_embedding = row['EMB']
+
+        # Get the embeddings for the same question from the augmented data where severity is 2, 3, or 4
+        aug_embeddings = aug_answers_df[(aug_answers_df['Question'] == row['Question']) 
+                                        & (aug_answers_df['Severity'].isin([2, 3, 4]))]['EMB']
+        print("Size of aug_embeddings for iteration: ", len(aug_embeddings))
+        # Calculate the cosine similarity for each augmented embedding and sum them
+        similarity_sum = 0
+        for aug_embedding in aug_embeddings:
+            similarity = cosine_similarity([trec_embedding], [aug_embedding])
+            similarity_sum += similarity
+
+        # Assign the sum of the similarities to the cosine_similarity_rank column
+        train_df.at[index, 'cosine_similarity_rank'] = similarity_sum
 
     print("Program completed.")
 
