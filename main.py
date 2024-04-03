@@ -4,6 +4,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from data_processing_utils import *
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import precision_score
 from tqdm import tqdm
 
 
@@ -94,7 +95,36 @@ def main():
         cos_similarity_df = similarity_sum_over_col(trec_df, aug_answers_df, question_num=i)
         print(f"Saving cosine similarity for question {i}...")
 
-    
+    ### This section is for evaluating the rank based on the 'rel' column. 
+    # Do the top 100 posts have relevance to the questions?
+    # Evaluate the relevance of the top 100 answers for each question
+    for i in range(1, 22):
+        print(f"Evaluating relevance for question {i}...")
+        
+        # Load the cosine similarity dataframe for the question
+        cos_similarity_df = pd.read_csv(f'cosine_similarity_{i}.csv')
+        
+        # Get the top 100 answers
+        top_100_answers = cos_similarity_df.nlargest(100, 'cosine_similarity')
+        
+        # Check whether the answers are relevant to the question
+        top_100_answers['is_relevant'] = top_100_answers['query'] == i
+        
+        # Calculate the precision of the top 100 answers
+        precision = precision_score(top_100_answers['rel'], top_100_answers['is_relevant'])
+        
+        print(f"Precision for question {i}: {precision}")
+
+
+    # Generate precision/accuracy tables for each question, and save the results to a csv
+
+
+
+    # Generate plots for the precision/accuracy tables
+
+
+
+    # Get overall performance stats for the model in general, and generate plots
 
 
     print("Program completed.")
