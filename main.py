@@ -4,6 +4,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from data_processing_utils import *
 from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
+
 
 
 def main():
@@ -81,22 +83,29 @@ def main():
     # Create a new column for the cosine similarity rank
     train_df['cosine_similarity_rank'] = 0
 
-    for index, row in train_df.iterrows():
+
+    for index, row in tqdm(train_df.iterrows(), total=train_df.shape[0]):
         # Get the trec_embedding for the current row
         trec_embedding = row['EMB']
 
-        # Get the embeddings for the same question from the augmented data where severity is 2, 3, or 4
-        aug_embeddings = aug_answers_df[(aug_answers_df['Question'] == row['Question']) 
-                                        & (aug_answers_df['Severity'].isin([2, 3, 4]))]['EMB']
-        print("Size of aug_embeddings for iteration: ", len(aug_embeddings))
-        # Calculate the cosine similarity for each augmented embedding and sum them
-        similarity_sum = 0
-        for aug_embedding in aug_embeddings:
-            similarity = cosine_similarity([trec_embedding], [aug_embedding])
-            similarity_sum += similarity
+        for question_num in range(1, 22):
 
-        # Assign the sum of the similarities to the cosine_similarity_rank column
-        train_df.at[index, 'cosine_similarity_rank'] = similarity_sum
+            # add a column for each question
+            train_df[f'cosine_similarity_rank_{question_num}'] = 0
+
+            # Get the embeddings for the same question from the augmented data where severity is 2, 3, or 4
+            aug_embeddings = aug_answers_df[(aug_answers_df['Question'] == question_num) 
+                                            & (aug_answers_df['Severity'].isin([2, 3, 4]))]['EMB']
+
+            # Calculate the cosine similarity for each augmented embedding and sum them
+            similarity_sum = 0
+            for aug_embedding in aug_embeddings:
+                similarity = cosine_similarity([trec_embedding], [aug_embedding])
+                similarity_sum += similarity
+
+            # Assign the sum of the similarities to the cosine_similarity_rank column
+            train_df.at[index, f'cosine_similarity_rank_{question_num}'] = similarity_sum
+
 
     print("Program completed.")
 
