@@ -82,36 +82,8 @@ def main():
     # Create a new column for the cosine similarity rank
     train_df['cosine_similarity_rank'] = 0
 
-
-    for index, row in tqdm(train_df.iterrows(), total=train_df.shape[0]):
-        # Get the trec_embedding for the current row
-        trec_embedding = row['EMB']
-
-        for question_num in range(1, 22):
-
-            # add a column for each question
-            train_df[f'cosine_similarity_rank_{question_num}'] = 0
-
-            # Get the embeddings for the same question from the augmented data where severity is 2, 3, or 4
-            aug_embeddings = aug_answers_df[(aug_answers_df['Question'] == question_num) 
-                                            & (aug_answers_df['Severity'].isin([2, 3, 4]))]['EMB']
-
-            # Calculate the cosine similarity for each augmented embedding and sum them
-            similarity_sum = 0
-            for aug_embedding in aug_embeddings:
-                # Ensure the embeddings are numpy arrays
-                if isinstance(trec_embedding, torch.Tensor):
-                    trec_embedding = trec_embedding.cpu().numpy()
-                if isinstance(aug_embedding, torch.Tensor):
-                    aug_embedding = aug_embedding.cpu().numpy()
-
-                # Calculate the cosine similarity
-                similarity = cosine_similarity(trec_embedding, aug_embedding)
-                similarity_sum += similarity
-
-            # Assign the sum of the similarities to the cosine_similarity_rank column
-            train_df.at[index, f'cosine_similarity_rank_{question_num}'] = similarity_sum
-
+    cos_similarity_df = calculate_cosine_similarity(train_df, aug_answers_df, 'cosine_similarities.csv')
+    print("Cosine similarities calculated and saved.")
 
     print("Program completed.")
 
