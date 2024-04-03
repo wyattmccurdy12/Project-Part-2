@@ -7,16 +7,24 @@ from tqdm import tqdm
 import nltk
 nltk.download('vader_lexicon')
 nltk.download('averaged_perceptron_tagger')
-import yake
-from nltk.tokenize import sent_tokenize
 from nltk.sentiment import SentimentIntensityAnalyzer
 from transformers import AutoTokenizer, AutoModel
 import torch
-
-
+from sklearn.metrics.pairwise import cosine_similarity
 
 ## PREPROCESSING FUNCTIONS ##
+
 def process_trec_file(directory, filename):
+    """
+    Process a TREC file and return a pandas DataFrame. A building block for process_trec_dir.
+
+    Parameters:
+    directory (str): The directory where the TREC file is located.
+    filename (str): The name of the TREC file.
+
+    Returns:
+    pandas.DataFrame: A DataFrame containing the processed data from the TREC file.
+    """
     filepath = os.path.join(directory, filename)
     with open(filepath, 'r') as f:
         content = f.read()
@@ -346,7 +354,6 @@ def create_embeddings_for_sentences(sentences):
         embeddings_list.append(embeddings)
     return torch.cat(embeddings_list, dim=0)
 
-
 def process_augmented_data(in_lines_file, out_file_path, exploded_df_path, embeddings_path):
     """
     This function loads the augmented data, splits the answers into individual sentences,
@@ -386,3 +393,49 @@ def process_augmented_data(in_lines_file, out_file_path, exploded_df_path, embed
 
 ## END VECTOR EMBEDDING FUNCTIONS ##
 
+## COSINE SIMILARITY FUNCTIONS ##
+def calculate_cosine_similarity(post_text_df, aug_answers_df, save_name):
+    """
+    This function calculates the cosine similarity between the embeddings of each row in the incoming posts and the embeddings
+    of each answer in the augmented data where severity is 2, 3, or 4. The results are stored in new columns in
+    the post_text_df.
+
+    If a save_name is provided, the function will attempt to load the dataframe from a CSV file with that name. If the file
+    does not exist, it will perform the calculations and save the resulting dataframe to a CSV file with the provided name.
+
+    Parameters:
+    post_text_df (pandas.DataFrame): The dataframe containing the post texts. It should have a column 'EMB' for embeddings.
+    aug_answers_df (pandas.DataFrame): The dataframe containing the augmented data. It should have a column 'Question' for question numbers,
+                                       a column 'Severity' for severity levels, and a column 'EMB' for embeddings.
+    save_name (str): The name of the CSV file to save to or load from.
+
+    Returns:
+    post_text_df (pandas.DataFrame): The input dataframe with added cosine similarity rank columns.
+    """
+    if os.path.exists(save_name):
+        post_text_df = pd.read_csv(save_name)
+    else:
+        for index, row in tqdm(post_text_df.iterrows(), total=post_text_df.shape[0]):
+            trec_embedding = row['EMB']
+
+            for question_num in range(1, 22):
+                post_text_df[f'cosine_similarity_rank_{question_num}'] = 0
+
+                aug_embeddings = aug_answers_df[(aug_answers_df['Question'] == question_num) 
+                                                & (aug_answers_df['Severity'].isin([2, 3, 4]))]['EMB']
+
+                similarity_sum = 0
+                for aug_embedding in aug_embeddings:
+                    if isinstance(trec_embedding, torch.Tensor):
+                        trec_embedding = trec_embedding.cpu().numpy()
+                    if isinstance(aug_embedding, torch.Tensor):
+                        aug_embedding = aug_embedding.cpu().numpy()
+
+                    similarity = cosine_similarity(trec_embedding.reshape(1, -1), aug_embedding.reshape(1, -1))
+                    similarity_sum += similarity
+
+                post_text_df.at[index, f'cosine_similarity_rank_{question_num}'] = similarity_sum
+
+        post_text_df.to_csv(save_name, index=False)
+
+    return post_text_df

@@ -7,7 +7,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 
 
-
 def main():
     """
     Main function that performs the following tasks:
@@ -107,7 +106,7 @@ def main():
                     aug_embedding = aug_embedding.cpu().numpy()
 
                 # Calculate the cosine similarity
-                similarity = cosine_similarity([trec_embedding], [aug_embedding])
+                similarity = cosine_similarity(trec_embedding, aug_embedding)
                 similarity_sum += similarity
 
             # Assign the sum of the similarities to the cosine_similarity_rank column
