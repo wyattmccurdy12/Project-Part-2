@@ -5,8 +5,19 @@ from data_processing_utils import *
 
 
 def main():
+    """
+    1. Load and preprocess the data from the training data directory.
+    2. Merge the trec data with the consensus data.
+    3. Clean the text in the merged data (remove duplicates, empty text, etc.)
+    4. Create polarity column and a self reference flag column.
+    5. Filter the data for negative and self referential sentences.
+    6. Generate embeddings for the text data.
+    7. Load the augmented data.
+    8. Generate embeddings for the augmented data.
 
-
+    The function does not take any arguments and does not return any values. 
+    It prints messages to the console to indicate the progress of the tasks.
+    """
     print("Starting the program...")
 
     # Set up the paths
@@ -49,9 +60,20 @@ def main():
         trec_df['EMB'] = trec_df['TEXT'].apply(generate_embeddings)
         np.save('embeddings.npy', trec_df['EMB'])
 
+    ### Augmented Data ###
     # Read in relevant answers to the 21 questions
+    aug_answers_df = generate_answers_df(in_lines_file='augmented_answer_sets.txt', out_file_path='augmented_answers.csv')
+    print("Augmented answers loaded successfully.")
+
+    # Split the answers into individual sentences
+    aug_answers_df['Text'] = aug_answers_df['Text'].str.split(',')
+    aug_answers_df = aug_answers_df.explode('Text')
     
-    
+    # Generate embeddings for the answers
+    aug_answers_df['EMB'] = aug_answers_df['Text'].apply(generate_embeddings)
+    ### End Augmented Data ###
+
+
 
     print("Program completed.")
 

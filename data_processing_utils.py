@@ -135,7 +135,7 @@ def persons_and_emotions(df, outname='persons_and_emotions.csv'):
     return df
 
 
-def generate_answers_df(in_lines_file='augmented_answer_sets.txt', out_file_path='aug_answers.csv'):
+def generate_answers_df(in_lines_file='augmented_answer_sets.txt', out_file_path='augmented_answers.csv'):
     if os.path.exists(out_file_path):
         return pd.read_csv(out_file_path)
 
@@ -146,7 +146,7 @@ def generate_answers_df(in_lines_file='augmented_answer_sets.txt', out_file_path
 
     with open(in_lines_file, 'r') as f:
         lines = f.readlines()
-    
+
     question_number = 0
     for line in lines:
         line = line.strip()
