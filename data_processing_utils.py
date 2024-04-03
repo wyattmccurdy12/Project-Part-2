@@ -135,6 +135,38 @@ def persons_and_emotions(df, outname='persons_and_emotions.csv'):
     return df
 
 
+def generate_answers_df(in_lines_file='augmented_answer_sets.txt', out_file_path='aug_answers.csv'):
+    if os.path.exists(out_file_path):
+        return pd.read_csv(out_file_path)
+
+    questions = {
+        i: {j: [] for j in range(1, 5)}
+        for i in range(1, 22)
+    }
+
+    with open(in_lines_file, 'r') as f:
+        lines = f.readlines()
+    
+    question_number = 0
+    for line in lines:
+        line = line.strip()
+        if len(line) < 3:
+            question_number = int(line)
+            severity = 1
+        else:
+            questions[question_number][severity].append(line)
+            severity += 1
+
+    df_list = []
+    for question_number in questions:
+        for severity in questions[question_number]:
+            for text in questions[question_number][severity]:
+                df_list.append(pd.DataFrame({'Question': [question_number], 'Severity': [severity], 'Text': [text]}))
+    df = pd.concat(df_list, ignore_index=True)
+
+    return df
+
+
 ## END PREPROCESSING FUNCTIONS ##
 ############################################################################################
 
@@ -318,41 +350,3 @@ def create_embeddings_for_sentences(sentences):
 
 ## END VECTOR EMBEDDING FUNCTIONS ##
 
-# TODO test this function
-def load_augmented_answers(augmented_answers_file):
-    """
-    Load augmented answers from a text file and process them into a dictionary.
-
-    Args:
-        augmented_answers_file (str): The path to the text file containing the augmented answers.
-    
-    Returns:
-        dict: The augmented answers as a dictionary.
-    """
-    with open(augmented_answers_file, 'r') as file:
-        lines = file.readlines()
-
-    # Initialize the dictionary
-    augmented_answers = {}
-
-    # Process each line
-    for line in lines:
-        # Split the line into segments
-        segments = line.split('Equivalent answers for item ')[1:]
-        for segment in segments:
-            # Extract the question number and the answers
-            question_number, answers_segment = segment.split('\n', 1)
-            answers = answers_segment.split('} {')
-            answers[0] = answers[0].lstrip('{ ')
-            answers[-1] = answers[-1].rstrip(' }')
-
-            # Process the answers into a subdictionary
-            subdictionary = {}
-            for answer in answers:
-                number, text = answer.split('. ', 1)
-                subdictionary[number] = text.split(', ')
-
-            # Add the subdictionary to the main dictionary
-            augmented_answers[f'Question {question_number}'] = subdictionary
-
-    return augmented_answers

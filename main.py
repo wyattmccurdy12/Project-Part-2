@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pandas as pd
 from data_processing_utils import *
 
@@ -40,8 +41,17 @@ def main():
     # Create a predominant polarity column, then a self referential flag column, then filter the data for negative and self referential sentences
     trec_df = persons_and_emotions(trec_df)
 
+    # Generate embeddings
+    if os.path.exists('embeddings.npy'):
+        print("Embeddings already exist. Loading...")
+        trec_df['EMB'] = np.load('embeddings.npy', allow_pickle=True)
+    else:
+        trec_df['EMB'] = trec_df['TEXT'].apply(generate_embeddings)
+        np.save('embeddings.npy', trec_df['EMB'])
 
-    trec_df['EMB'] = trec_df['TEXT'].apply(generate_embeddings)
+    # Read in relevant answers to the 21 questions
+    
+    
 
     print("Program completed.")
 
