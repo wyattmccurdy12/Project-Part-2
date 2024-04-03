@@ -100,6 +100,13 @@ def main():
             # Calculate the cosine similarity for each augmented embedding and sum them
             similarity_sum = 0
             for aug_embedding in aug_embeddings:
+                # Ensure the embeddings are numpy arrays
+                if isinstance(trec_embedding, torch.Tensor):
+                    trec_embedding = trec_embedding.cpu().numpy()
+                if isinstance(aug_embedding, torch.Tensor):
+                    aug_embedding = aug_embedding.cpu().numpy()
+
+                # Calculate the cosine similarity
                 similarity = cosine_similarity([trec_embedding], [aug_embedding])
                 similarity_sum += similarity
 

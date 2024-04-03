@@ -167,41 +167,6 @@ def generate_answers_df(in_lines_file='augmented_answer_sets.txt', out_file_path
 
     return df
 
-def process_augmented_data(in_lines_file, out_file_path, exploded_df_path, embeddings_path):
-    """
-    This function loads the augmented data, splits the answers into individual sentences,
-    and generates embeddings for the answers.
-
-    Parameters:
-    in_lines_file (str): The path to the input file containing the augmented data.
-    out_file_path (str): The path to the output file where the processed data will be saved.
-    exploded_df_path (str): The path to the saved exploded dataframe.
-    embeddings_path (str): The path to the saved embeddings.
-
-    Returns:
-    DataFrame: A pandas DataFrame containing the processed augmented data.
-    """
-    if os.path.exists(exploded_df_path) and os.path.exists(embeddings_path):
-        print("Exploded dataframe and embeddings already exist. Loading...")
-        aug_answers_df = pd.read_csv(exploded_df_path)
-        aug_answers_df['EMB'] = np.load(embeddings_path, allow_pickle=True)
-    else:
-        # Load the augmented data
-        aug_answers_df = generate_answers_df(in_lines_file, out_file_path)
-        print("Augmented answers loaded successfully.")
-
-        # Split the answers into individual sentences
-        aug_answers_df['Text'] = aug_answers_df['Text'].str.split(',')
-        aug_answers_df = aug_answers_df.explode('Text')
-        
-        # Generate embeddings for the answers
-        aug_answers_df['EMB'] = aug_answers_df['Text'].apply(generate_embeddings)
-
-        # Save the exploded dataframe and embeddings
-        aug_answers_df.to_csv(exploded_df_path, index=False)
-        np.save(embeddings_path, aug_answers_df['EMB'])
-
-    return aug_answers_df
 ## END PREPROCESSING FUNCTIONS ##
 ############################################################################################
 
@@ -341,8 +306,6 @@ def filter_positive_and_neutral_sents(sentences):
 ## VECTOR EMBEDDING FUNCTIONS ##
 ## Generate vector embeddings
 
-
-
 def generate_embeddings(text):
     """
     Generate vector embeddings for a text using the all-MiniLM-L6-v2 pretrained model.
@@ -382,6 +345,44 @@ def create_embeddings_for_sentences(sentences):
         embeddings = generate_embeddings(sentence)
         embeddings_list.append(embeddings)
     return torch.cat(embeddings_list, dim=0)
+
+
+def process_augmented_data(in_lines_file, out_file_path, exploded_df_path, embeddings_path):
+    """
+    This function loads the augmented data, splits the answers into individual sentences,
+    and generates embeddings for the answers.
+
+    Parameters:
+    in_lines_file (str): The path to the input file containing the augmented data.
+    out_file_path (str): The path to the output file where the processed data will be saved.
+    exploded_df_path (str): The path to the saved exploded dataframe.
+    embeddings_path (str): The path to the saved embeddings.
+
+    Returns:
+    DataFrame: A pandas DataFrame containing the processed augmented data.
+    """
+    if os.path.exists(exploded_df_path) and os.path.exists(embeddings_path):
+        print("Exploded dataframe and embeddings already exist. Loading...")
+        aug_answers_df = pd.read_csv(exploded_df_path)
+        aug_answers_df['EMB'] = np.load(embeddings_path, allow_pickle=True)
+    else:
+        # Load the augmented data
+        aug_answers_df = generate_answers_df(in_lines_file, out_file_path)
+        print("Augmented answers loaded successfully.")
+
+        # Split the answers into individual sentences
+        aug_answers_df['Text'] = aug_answers_df['Text'].str.split(',')
+        aug_answers_df = aug_answers_df.explode('Text')
+        
+        # Generate embeddings for the answers
+        aug_answers_df['EMB'] = aug_answers_df['Text'].apply(generate_embeddings)
+
+        # Save the exploded dataframe and embeddings
+        aug_answers_df.to_csv(exploded_df_path, index=False)
+        np.save(embeddings_path, aug_answers_df['EMB'])
+
+    return aug_answers_df
+
 
 ## END VECTOR EMBEDDING FUNCTIONS ##
 
