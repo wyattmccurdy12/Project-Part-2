@@ -45,7 +45,7 @@ def main():
     # Create a predominant polarity column, a self referential flag column, and filter the data
     trec_df = persons_and_emotions(trec_df)
 
-    # Generate or load embeddings
+    # Generate or load embeddings - embeddings for user generated posts. "embeddings.npy"
     if os.path.exists('embeddings.npy'):
         print("Embeddings already exist. Loading...")
         trec_df['EMB'] = np.load('embeddings.npy', allow_pickle=True)
@@ -53,6 +53,8 @@ def main():
         trec_df['EMB'] = trec_df['TEXT'].apply(generate_embeddings)
         np.save('embeddings.npy', trec_df['EMB'])
 
+    # Augmented answer sets from q1-q21. 
+    # saved as "augmented_exploded.csv" and "augmented_exploded_embeddings.npy"
     aug_answers_df = process_augmented_data('augmented_answer_sets.txt', 'augmented_answers.csv',
                                             'augmented_exploded.csv', 'augmented_exploded_embeddings.npy')
 
