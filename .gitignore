@@ -3667,3 +3667,7 @@ tabulated_trec_data.csv
 merged_data.csv
 merged_clean_data.csv
 persons_and_emotions.csv
+augmented_exploded_embeddings.npy
+augmented_exploded.csv
+embeddings.npy
+__pycache__/data_processing_utils.cpython-38.pyc
