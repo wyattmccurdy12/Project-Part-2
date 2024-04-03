@@ -394,6 +394,111 @@ def process_augmented_data(in_lines_file, out_file_path, exploded_df_path, embed
 ## END VECTOR EMBEDDING FUNCTIONS ##
 
 ## COSINE SIMILARITY FUNCTIONS ##
+# Maybe not used...
+def calculate_similarity(sentence_1, sentence_2, tokenizer, model):
+    """
+    This function calculates the cosine similarity between the embeddings of two sentences.
+
+    Parameters:
+    sentence_1 (str): The first sentence.
+    sentence_2 (str): The second sentence.
+    tokenizer (transformers.PreTrainedTokenizer): The tokenizer to use.
+    model (transformers.PreTrainedModel): The model to use.
+
+    Returns:
+    cs (float): The cosine similarity between the embeddings of the two sentences.
+    """
+    # Tokenize and get embeddings for the sentences
+    inputs_1 = tokenizer(sentence_1, return_tensors='pt', padding=True, truncation=True)
+    inputs_2 = tokenizer(sentence_2, return_tensors='pt', padding=True, truncation=True)
+    outputs_1 = model(**inputs_1)
+    outputs_2 = model(**inputs_2)
+
+    # Calculate cosine similarity between the embeddings
+    cs = cosine_similarity(outputs_1.last_hidden_state.mean(dim=1).detach().numpy(), 
+                           outputs_2.last_hidden_state.mean(dim=1).detach().numpy())
+
+    return cs[0][0]
+
+
+# Create a function to calculate the sum of cosine similarities between an input text and a dataframe column of answer texts
+def calculate_similarity_sum(input_text, input_df, df_column, tokenizer, model):
+    """
+    This function calculates the sum of cosine similarities between the input text and a dataframe column of answer texts.
+
+    Parameters:
+    input_text (str): The input text.
+    input_df (pandas.DataFrame): The dataframe containing the answer texts.
+    df_column (str): The column in the dataframe containing the answer texts.
+    tokenizer (transformers.PreTrainedTokenizer): The tokenizer to use.
+    model (transformers.PreTrainedModel): The model to use.
+
+    Returns:
+    cs_sum (float): The sum of cosine similarities between the input text and the answer texts.
+    """
+    # Tokenize and get embeddings for the input text
+    inputs_1 = tokenizer(input_text, return_tensors='pt', padding=True, truncation=True)
+    outputs_1 = model(**inputs_1)
+
+    # Calculate cosine similarity between the input text and each answer text
+    cs_sum = 0
+    for answer_text in input_df[df_column]:
+        inputs_2 = tokenizer(answer_text, return_tensors='pt', padding=True, truncation=True)
+        outputs_2 = model(**inputs_2)
+        cs = cosine_similarity(outputs_1.last_hidden_state.mean(dim=1).detach().numpy(), 
+                               outputs_2.last_hidden_state.mean(dim=1).detach().numpy())
+        cs_sum += cs[0][0]
+
+    return cs_sum
+
+
+def similarity_sum_over_col(persons_and_emotions_df, augmented_exploded_df, question_num):
+    """
+    This function reads the persons_and_emotions dataframe and creates answer columns for each of the 21 questions.
+    Then for each question, it finds the corresponding answer in the augmented_exploded dataframe and gets the cosine similarity sum.
+
+    Parameters:
+    persons_and_emotions_file (str): The path to the persons_and_emotions CSV file.
+    augmented_exploded_file (str): The path to the augmented_exploded CSV file.
+
+    Returns:
+    persons_and_emotions_df (pandas.DataFrame): The processed dataframe.
+    """
+
+    # Specify the name of the CSV file
+    save_name = f'cosine_similarity_q{question_num}'
+
+    # Check if the CSV file exists
+    if os.path.exists(save_name):
+        # If the file exists, load the dataframe from it
+        persons_and_emotions_df = pd.read_csv(save_name)
+    else:
+        # If the file doesn't exist, perform the calculations
+
+        # Load the tokenizer and the model
+        tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+        model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+        
+        # Create answer column for the question and its similarity score
+        persons_and_emotions_df[f'SIM_{question_num}'] = ''
+
+        # For each question, find the corresponding answer in the augmented_exploded dataframe and get the cosine similarity sum
+
+        for index, row in tqdm(persons_and_emotions_df.iterrows(), total=persons_and_emotions_df.shape[0]):
+            corresponding_answer = augmented_exploded_df[(augmented_exploded_df['Question'] == question_num)]
+            cs_sum = calculate_similarity_sum(row['TEXT'], corresponding_answer, 'Text', tokenizer, model)
+            persons_and_emotions_df.at[index, f'SIM_{question_num}'] = cs_sum
+
+        # Sort the dataframe by similarity
+        persons_and_emotions_df = persons_and_emotions_df.sort_values(by=f'SIM_{question_num}', ascending=False)
+
+        # Save the resulting dataframe to a CSV file
+        persons_and_emotions_df.to_csv(save_name, index=False)
+        print(f"Data saved to {save_name}.")
+
+    return persons_and_emotions_df
+
+# Updating this function. See above
 def calculate_cosine_similarity(post_text_df, aug_answers_df, save_name):
     """
     This function calculates the cosine similarity between the embeddings of each row in the incoming posts and the embeddings
