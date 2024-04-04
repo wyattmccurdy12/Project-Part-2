@@ -81,7 +81,7 @@ class DataPreProcessor:
             filelist = random.sample(filelist, sample_size)
         df_list = []
         for filename in tqdm(filelist, desc='Processing TREC files'):
-            df = process_trec_file(directory, filename)
+            df = self.process_trec_file(directory, filename)
             df_list.append(df)
         result_df = pd.concat(df_list, ignore_index=True)
         return result_df
@@ -105,7 +105,7 @@ class DataPreProcessor:
         else:
             print('Tabulating TREC data...')
             trec_data_path = os.path.join(training_data_dir, trec_folder_name)
-            trec_df = process_trec_dir(trec_data_path, sample=False)
+            trec_df = self.process_trec_dir(trec_data_path, sample=False)
             trec_df.to_csv(output_csv_path, index=False)
             return trec_df
 
@@ -145,7 +145,7 @@ class DataPreProcessor:
         
         if not os.path.exists(out_merged_csv_path):
             training_rels_consenso = pd.read_csv(training_rels_consenso_path)
-            merged_data = merge_dataframes(trec_df,  training_rels_consenso)
+            merged_data = self.merge_dataframes(trec_df,  training_rels_consenso)
             merged_data.to_csv(out_merged_csv_path, index=False)
             print('Data merged')
         else:

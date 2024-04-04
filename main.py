@@ -14,6 +14,10 @@ def main():
     '''
     DATA PREPROCESSING
     '''
+    # Define the paths to the majority and consensus data
+    # training_qrels_majority_2 = os.path.join(training_data_dir, 'g_qrels_majority_2.csv')
+    # training_rels_consenso_path = os.path.join(training_data_dir, 'g_rels_consenso.csv')
+
     print("Starting the program...")
 
     # Define the top level directory - task 1 - contains training, results, testing data
@@ -23,11 +27,7 @@ def main():
 
     # Define the paths to the TREC formatted files
     trec_formatted_files = os.path.join(training_data_dir, 'new_data/')
-    # Define the paths to the majority and consensus data
-    # training_qrels_majority_2 = os.path.join(training_data_dir, 'g_qrels_majority_2.csv')
-    # training_rels_consenso_path = os.path.join(training_data_dir, 'g_rels_consenso.csv')
 
-    # Load and preprocess the data
     print("Tabulating TREC data...")
     trec_df = dpp.trec_csv_from_dir(training_data_dir, trec_formatted_files, 'tabulated_unfiltered_trec.csv')
     trec_df = dpp.clean_text(trec_df, 'tabulated_cleaned_unfiltered_trec.csv')
@@ -60,20 +60,8 @@ def main():
     embeddings associated with symptoms should give that post a higher ranking for that particular question.
     From the user post data, the text comes from the TEXT column and the indicator for whether or not 
     the post has been associated with the question comes from the 'rel' column [0,1].
-    We will split the data into training and validation, and evaluate the accuracy of our cosine similarity method.
     '''
     print("Starting the cosine similarity rank calculation...")
-
-    # # Split the data into training and validation
-    # train_df, val_df = train_test_split(trec_df, test_size=0.2, random_state=42)
-
-    # # Create a new column for the cosine similarity rank
-    # train_df['cosine_similarity_rank'] = 0
-
-
-    # Calculate cosine similarities for all
-    # cos_similarity_df = similarity_sum_over_col(trec_df, aug_answers_df)
-    # print("Cosine similarities calculated and saved.")
 
     # Modify slightly - add a question_num argument, do for all 21 questions, and save to 21 dataframes
     # sorted on similarity for the particular question
@@ -82,25 +70,25 @@ def main():
         cos_similarity_df = similarity_sum_over_col(trec_df, aug_answers_df, question_num=i)
         print(f"Saving cosine similarity for question {i}...")
 
-    ### This section is for evaluating the rank based on the 'rel' column. 
-    # Do the top 100 posts have relevance to the questions?
-    # Evaluate the relevance of the top 100 answers for each question
-    for i in range(1, 22):
-        print(f"Evaluating relevance for question {i}...")
+    # ### This section is for evaluating the rank based on the 'rel' column. 
+    # # Do the top 100 posts have relevance to the questions?
+    # # Evaluate the relevance of the top 100 answers for each question
+    # for i in range(1, 22):
+    #     print(f"Evaluating relevance for question {i}...")
         
-        # Load the cosine similarity dataframe for the question
-        cos_similarity_df = pd.read_csv(f'cosine_similarity_{i}.csv')
+    #     # Load the cosine similarity dataframe for the question
+    #     cos_similarity_df = pd.read_csv(f'cosine_similarity_{i}.csv')
         
-        # Get the top 100 answers
-        top_100_answers = cos_similarity_df.nlargest(100, 'cosine_similarity')
+    #     # Get the top 100 answers
+    #     top_100_answers = cos_similarity_df.nlargest(100, 'cosine_similarity')
         
-        # Check whether the answers are relevant to the question
-        top_100_answers['is_relevant'] = top_100_answers['query'] == i
+    #     # Check whether the answers are relevant to the question
+    #     top_100_answers['is_relevant'] = top_100_answers['query'] == i
         
-        # Calculate the precision of the top 100 answers
-        precision = precision_score(top_100_answers['rel'], top_100_answers['is_relevant'])
+    #     # Calculate the precision of the top 100 answers
+    #     precision = precision_score(top_100_answers['rel'], top_100_answers['is_relevant'])
         
-        print(f"Precision for question {i}: {precision}")
+    #     print(f"Precision for question {i}: {precision}")
 
     # Generate precision/accuracy tables for each question, and save the results to a csv
 
