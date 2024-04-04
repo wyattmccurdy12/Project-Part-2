@@ -12,241 +12,268 @@ from transformers import AutoTokenizer, AutoModel
 import torch
 from sklearn.metrics.pairwise import cosine_similarity
 
-## PREPROCESSING FUNCTIONS ##
+##########################################
+## PREPROCESSING FUNCTIONS ## 
+##############
+######
 
-def process_trec_file(directory, filename):
+class DataPreProcessor:
     """
-    Process a TREC file and return a pandas DataFrame. A building block for process_trec_dir.
-
-    Parameters:
-    directory (str): The directory where the TREC file is located.
-    filename (str): The name of the TREC file.
-
-    Returns:
-    pandas.DataFrame: A DataFrame containing the processed data from the TREC file.
-    """
-    filepath = os.path.join(directory, filename)
-    with open(filepath, 'r') as f:
-        content = f.read()
-
-    df = pd.DataFrame(columns=['docid', 'PRE', 'TEXT', 'POST'])
-
-    doctags = re.findall('<DOC>.*?</DOC>', content, re.DOTALL)
-    for doctag in doctags:
-        docno = re.findall('<DOCNO>(.*?)</DOCNO>', doctag)[0]
-        pre = re.findall('<PRE>(.*?)</PRE>', doctag)
-        pre = pre[0] if pre else ''
-        text = re.findall('<TEXT>(.*?)</TEXT>', doctag)
-        text = text[0] if text else ''
-        post = re.findall('<POST>(.*?)</POST>', doctag)
-        post = post[0] if post else ''
-        new_row = pd.DataFrame([[docno, pre, text, post]], columns=['docid', 'PRE', 'TEXT', 'POST'])
-        df = pd.concat([df, new_row], ignore_index=True)
-
-    df = df.dropna(subset=['docid'])
-    df = df[['docid', 'PRE', 'TEXT', 'POST']]
-
-    return df
-
-
-def process_trec_dir(directory, sample=False, sample_size=100):
-    """
-    Process all TREC files in a directory and return a concatenated DataFrame.
+    Preprocess TREC formatted files as well as rels dataframes.
 
     Args:
-        directory (str): The directory path where the TREC files are located.
-        sample (bool, optional): Whether to sample files randomly. Defaults to True.
-        sample_size (int, optional): The number of files to sample. Defaults to 100.
+        trec_dir (str): The directory path where the TREC files are located.
 
-    Returns:
-        pandas.DataFrame: A concatenated DataFrame containing the processed data from all TREC files.
+    Attributes:
+        trec_dir (str): The directory path where the TREC files are located.
     """
-    filelist = os.listdir(directory)
-    if sample:
-        filelist = random.sample(filelist, sample_size)
-    df_list = []
-    for filename in tqdm(filelist, desc='Processing TREC files'):
-        df = process_trec_file(directory, filename)
-        df_list.append(df)
-    result_df = pd.concat(df_list, ignore_index=True)
-    return result_df
+    def __init__(self, trec_dir):
+        self.trec_dir = trec_dir
 
+    def process_trec_file(self, directory, filename):
+        """
+        Process a TREC file and return a pandas DataFrame. A building block for process_trec_dir.
 
-def merge_dataframes(trec_df, training_rels_consenso):
-    # Load the ancillary data
-    # qrels = pd.read_csv(training_qrels_majority_2)
-    # rels = pd.read_csv(training_rels_consenso)
+        Parameters:
+        directory (str): The directory where the TREC file is located.
+        filename (str): The name of the TREC file.
 
-    # Print the size of each dataframe
-    # print(f'Size of qrels: {qrels.shape[0]}')
-    print(f'Size of rels: {training_rels_consenso.shape[0]}')
-    print(f'Size of trec_df: {trec_df.shape[0]}')
+        Returns:
+        pandas.DataFrame: A DataFrame containing the processed data from the TREC file.
+        """
+        filepath = os.path.join(directory, filename)
+        with open(filepath, 'r') as f:
+            content = f.read()
 
-    # Merge qrels and rels on docid
-    # merged_data = pd.merge(qrels, rels, on='docid', how='inner')
-    # print(f'Size of merged_data (qrels and rels): {merged_data.shape[0]}')
+        df = pd.DataFrame(columns=['docid', 'PRE', 'TEXT', 'POST'])
 
-    # Merge trec_df and merged_data on docid
-    merged_data = pd.merge(trec_df, training_rels_consenso, on='docid', how='inner')
-    print(f'Size of merged_data (trec_df and merged_data): {merged_data.shape[0]}')
+        doctags = re.findall('<DOC>.*?</DOC>', content, re.DOTALL)
+        for doctag in doctags:
+            docno = re.findall('<DOCNO>(.*?)</DOCNO>', doctag)[0]
+            pre = re.findall('<PRE>(.*?)</PRE>', doctag)
+            pre = pre[0] if pre else ''
+            text = re.findall('<TEXT>(.*?)</TEXT>', doctag)
+            text = text[0] if text else ''
+            post = re.findall('<POST>(.*?)</POST>', doctag)
+            post = post[0] if post else ''
+            new_row = pd.DataFrame([[docno, pre, text, post]], columns=['docid', 'PRE', 'TEXT', 'POST'])
+            df = pd.concat([df, new_row], ignore_index=True)
 
-    return merged_data
+        df = df.dropna(subset=['docid'])
+        df = df[['docid', 'PRE', 'TEXT', 'POST']]
 
+        return df
 
-def clean_text(df, outname='merged_clean_data.csv'):
-    """
-    Remove rows with no text or with empty strings in the 'TEXT' column, and remove duplicate rows based on the 'TEXT' column.
+    def process_trec_dir(self, directory, sample=False, sample_size=100):
+        """
+        Process all TREC files in a directory and return a concatenated DataFrame.
 
-    Args:
-        df (pandas.DataFrame): The DataFrame to clean.
+        Args:
+            directory (str): The directory path where the TREC files are located.
+            sample (bool, optional): Whether to sample files randomly. Defaults to True.
+            sample_size (int, optional): The number of files to sample. Defaults to 100.
 
-    Returns:
-        pandas.DataFrame: The cleaned DataFrame.
-    """
-    if os.path.exists(outname):
-        print(f"Loading data from {outname}...")
-        df = pd.read_csv(outname)
-    else:
-        print("Removing data with no text...")
-        df = df.dropna(subset=['TEXT'])
-        df = df[df['TEXT'] != '']
-        print("Removing duplicate rows...")
-        df = df.drop_duplicates(subset=['TEXT'])
-        df.to_csv(outname, index=False)
-        print(f"Data cleaned and saved to {outname}.")
-    return df
+        Returns:
+            pandas.DataFrame: A concatenated DataFrame containing the processed data from all TREC files.
+        """
+        filelist = os.listdir(directory)
+        if sample:
+            filelist = random.sample(filelist, sample_size)
+        df_list = []
+        for filename in tqdm(filelist, desc='Processing TREC files'):
+            df = process_trec_file(directory, filename)
+            df_list.append(df)
+        result_df = pd.concat(df_list, ignore_index=True)
+        return result_df
 
+    def trec_csv_from_dir(self, training_data_dir, trec_folder_name, output_csv_path='tabulated_trec_data.csv'):
+        """
+        Load and preprocess TREC data from the directory and save it to a CSV file. (if not exists already)
 
-def persons_and_emotions(df, outname='persons_and_emotions.csv'):
-    """
-    Create a predominant polarity column, a self referential flag column, and filter the data for negative and self referential sentences.
+        Parameters:
+        - trec_csv1_path (str): The path to the TREC CSV file. (output)
+        - training_data_dir (str): The directory containing the TREC formatted data.
+        - create_all_new (bool): If True, the training data will be processed again and saved as a new CSV file. (will replace)
 
-    Args:
-        df (pandas.DataFrame): The DataFrame to process.
-
-    Returns:
-        pandas.DataFrame: The processed DataFrame.
-    """
-    if os.path.exists(outname):
-        print(f"Loading data from {outname}...")
-        df = pd.read_csv(outname)
-    else:
-        print("Creating predominant polarity column...")
-        df['polarity'] = df['TEXT'].apply(extract_polarity)
-        print("Creating self reference flags...")
-        df['self_ref'] = df['TEXT'].apply(flag_self_referential)
-        print("Filtering to only include negative and self referential posts...")
-        df = df[(df['polarity'] == 'neg' ) & (df['self_ref'] == 1)]
-
-        # Save filter flagged data to 'persons_and_emotions.csv'
-        df.to_csv(outname, index=False)
-        print(f"Data processed and saved to {outname}.")
-    return df
-
-
-def generate_answers_df(in_lines_file='augmented_answer_sets.txt', out_file_path='augmented_answers.csv'):
-    if os.path.exists(out_file_path):
-        return pd.read_csv(out_file_path)
-
-    questions = {
-        i: {j: [] for j in range(1, 5)}
-        for i in range(1, 22)
-    }
-
-    with open(in_lines_file, 'r') as f:
-        lines = f.readlines()
-
-    question_number = 0
-    for line in lines:
-        line = line.strip()
-        if len(line) < 3:
-            question_number = int(line)
-            severity = 1
+        Returns:
+        - trec_df (pandas.DataFrame): The loaded or processed TREC data as a DataFrame.
+        """
+        if os.path.exists(output_csv_path):
+            print('Reading in trec processed data...')
+            trec_df = pd.read_csv(output_csv_path)
+            return trec_df
         else:
-            questions[question_number][severity].append(line)
-            severity += 1
+            print('Tabulating TREC data...')
+            trec_data_path = os.path.join(training_data_dir, trec_folder_name)
+            trec_df = process_trec_dir(trec_data_path, sample=False)
+            trec_df.to_csv(output_csv_path, index=False)
+            return trec_df
 
-    df_list = []
-    for question_number in questions:
-        for severity in questions[question_number]:
-            for text in questions[question_number][severity]:
-                df_list.append(pd.DataFrame({'Question': [question_number], 'Severity': [severity], 'Text': [text]}))
-    df = pd.concat(df_list, ignore_index=True)
+    def merge_dataframes(self, trec_df, training_rels_consenso):
+        # Load the ancillary data
+        # qrels = pd.read_csv(training_qrels_majority_2)
+        # rels = pd.read_csv(training_rels_consenso)
 
-    return df
+        # Print the size of each dataframe
+        # print(f'Size of qrels: {qrels.shape[0]}')
+        print(f'Size of rels: {training_rels_consenso.shape[0]}')
+        print(f'Size of trec_df: {trec_df.shape[0]}')
 
-## END PREPROCESSING FUNCTIONS ##
-############################################################################################
+        # Merge qrels and rels on docid
+        # merged_data = pd.merge(qrels, rels, on='docid', how='inner')
+        # print(f'Size of merged_data (qrels and rels): {merged_data.shape[0]}')
+
+        # Merge trec_df and merged_data on docid
+        merged_data = pd.merge(trec_df, training_rels_consenso, on='docid', how='inner')
+        print(f'Size of merged_data (trec_df and merged_data): {merged_data.shape[0]}')
+
+        return merged_data
+
+    def merge_data(self, trec_df, training_rels_consenso_path, out_merged_csv_path='merged_data.csv'):
+        """
+        Merge the given dataframes and save the merged data to a CSV file. (if not exists already)
+
+        Args:
+            trec_csv1merged_path (str): The file path to save the merged data CSV file.
+            trec_df (pandas.DataFrame): The dataframe to be merged.
+            training_qrels_majority_2 (pandas.DataFrame): The dataframe containing training qrels majority 2 data.
+            training_rels_consenso (pandas.DataFrame): The dataframe containing training rels consenso data.
+
+        Returns:
+            pandas.DataFrame: The merged dataframe.
+        """
+        
+        if not os.path.exists(out_merged_csv_path):
+            training_rels_consenso = pd.read_csv(training_rels_consenso_path)
+            merged_data = merge_dataframes(trec_df,  training_rels_consenso)
+            merged_data.to_csv(out_merged_csv_path, index=False)
+            print('Data merged')
+        else:
+            print("Reading in merged data...")
+            merged_data = pd.read_csv(out_merged_csv_path)
+        return merged_data
+
+    def clean_text(self, df, outname='merged_clean_data.csv'):
+        """
+        Remove rows with no text or with empty strings in the 'TEXT' column, and remove duplicate rows based on the 'TEXT' column.
+
+        Args:
+            df (pandas.DataFrame): The DataFrame to clean.
+
+        Returns:
+            pandas.DataFrame: The cleaned DataFrame.
+        """
+        if os.path.exists(outname):
+            print(f"Loading data from {outname}...")
+            df = pd.read_csv(outname)
+        else:
+            print("Removing data with no text...")
+            df = df.dropna(subset=['TEXT'])
+            print(f"Data size after removing rows with no text: {df.shape}")
+            
+            df = df[df['TEXT'] != '']
+            print(f"Data size after removing rows with empty text: {df.shape}")
+            
+            print("Removing duplicate rows...")
+            df = df.drop_duplicates(subset=['TEXT'])
+            print(f"Data size after removing duplicate rows: {df.shape}")
+            
+            df.to_csv(outname, index=False)
+            print(f"Data cleaned and saved to {outname}.")
+        return df
+
+    def persons_and_emotions(self, df, outname='persons_and_emotions.csv'):
+        """
+        Create a predominant polarity column, a self referential flag column, and filter the data for negative and self referential sentences.
+
+        Args:
+            df (pandas.DataFrame): The DataFrame to process.
+
+        Returns:
+            pandas.DataFrame: The processed DataFrame.
+        """
+        if os.path.exists(outname):
+            print(f"Loading data from {outname}...")
+            df = pd.read_csv(outname)
+        else:
+            print("Creating predominant polarity column...")
+            df['polarity'] = df['TEXT'].apply(extract_polarity)
+            print("Creating self reference flags...")
+            df['self_ref'] = df['TEXT'].apply(flag_self_referential)
+            print("Filtering to only include negative and self referential posts...")
+            df = df[(df['polarity'] == 'neg' ) & (df['self_ref'] == 1)]
+
+            # Save filter flagged data to 'persons_and_emotions.csv'
+            df.to_csv(outname, index=False)
+            print(f"Data processed and saved to {outname}.")
+        return df
+
+    def generate_answers_df(self, in_lines_file='augmented_answer_sets.txt'):
+        # if os.path.exists(out_file_path):
+        #     return pd.read_csv(out_file_path)
+
+        questions = {
+            i: {j: [] for j in range(1, 5)}
+            for i in range(1, 22)
+        }
+
+        with open(in_lines_file, 'r') as f:
+            lines = f.readlines()
+
+        question_number = 0
+        for line in lines:
+            line = line.strip()
+            if len(line) < 3:
+                question_number = int(line)
+                severity = 1
+            else:
+                questions[question_number][severity].append(line)
+                severity += 1
+
+        df_list = []
+        for question_number in questions:
+            for severity in questions[question_number]:
+                for text in questions[question_number][severity]:
+                    df_list.append(pd.DataFrame({'Question': [question_number], 'Severity': [severity], 'Text': [text]}))
+        df = pd.concat(df_list, ignore_index=True)
+
+        return df
+
+    def process_augmented_data(self, in_lines_file, exploded_df_path):
+        """
+        This function loads the augmented answer sets from BDI, a
+        and processes them, outputing a dataframe and csv.
+
+        Parameters:
+        in_lines_file (str): The path to the input file containing the augmented data.
+        exploded_df_path (str): The path to the saved exploded dataframe.
+        embeddings_path (str): The path to the saved embeddings.
+
+        Returns:
+        DataFrame: A pandas DataFrame containing the processed augmented data.
+        """
+        if os.path.exists(exploded_df_path):
+            print("Loading exploded dataframe from disk...")
+            aug_answers_df = pd.read_csv(exploded_df_path)
+        else:
+            print("Generating exploded augmented answers dataframe...")
+            # Load the augmented data
+            aug_answers_df = self.generate_answers_df(in_lines_file)
+
+            # Split the answers into individual sentences
+            aug_answers_df['Text'] = aug_answers_df['Text'].str.split(',')
+            aug_answers_df = aug_answers_df.explode('Text')
+
+            # Save the exploded dataframe and embeddings
+            aug_answers_df.to_csv(exploded_df_path, index=False)
+            print(f"Exploded dataframe saved to {exploded_df_path}.")
+        print("Augmented answer sets processed.\n")
+        return aug_answers_df
+
 
 ## Functions pasted from main - modularization functions ##
 
-def trec_csv_from_dir(training_data_dir, trec_folder_name, output_csv_path='tabulated_trec_data.csv'):
-    """
-    Load and preprocess TREC data from the directory and save it to a CSV file. (if not exists already)
 
-    Parameters:
-    - trec_csv1_path (str): The path to the TREC CSV file. (output)
-    - training_data_dir (str): The directory containing the TREC formatted data.
-    - create_all_new (bool): If True, the training data will be processed again and saved as a new CSV file. (will replace)
-
-    Returns:
-    - trec_df (pandas.DataFrame): The loaded or processed TREC data as a DataFrame.
-    """
-    if os.path.exists(output_csv_path):
-        print('Reading in trec processed data...')
-        trec_df = pd.read_csv(output_csv_path)
-        return trec_df
-    else:
-        print('Tabulating TREC data...')
-        trec_data_path = os.path.join(training_data_dir, trec_folder_name)
-        trec_df = process_trec_dir(trec_data_path, sample=False)
-        trec_df.to_csv(output_csv_path, index=False)
-        return trec_df
-
-
-def merge_data(trec_df, training_rels_consenso_path, out_merged_csv_path='merged_data.csv'):
-    """
-    Merge the given dataframes and save the merged data to a CSV file. (if not exists already)
-
-    Args:
-        trec_csv1merged_path (str): The file path to save the merged data CSV file.
-        trec_df (pandas.DataFrame): The dataframe to be merged.
-        training_qrels_majority_2 (pandas.DataFrame): The dataframe containing training qrels majority 2 data.
-        training_rels_consenso (pandas.DataFrame): The dataframe containing training rels consenso data.
-
-    Returns:
-        pandas.DataFrame: The merged dataframe.
-    """
-    
-    if not os.path.exists(out_merged_csv_path):
-        training_rels_consenso = pd.read_csv(training_rels_consenso_path)
-        merged_data = merge_dataframes(trec_df,  training_rels_consenso)
-        merged_data.to_csv(out_merged_csv_path, index=False)
-        print('Data merged')
-    else:
-        print("Reading in merged data...")
-        merged_data = pd.read_csv(out_merged_csv_path)
-    return merged_data
-
-def preprocess_data(merged_data):
-    '''
-    Preprocess the data by extracting the polarity of the text and flagging self-referential text.
-    Add these factors as new columns.
-
-    Parameters:
-    - merged_data: pandas DataFrame
-        The input data containing the text column.
-
-    Returns:
-    - preprocessed_data: pandas DataFrame
-        The preprocessed data with additional columns for polarity and self-reference flags.
-    '''
-    # First, drop rows that are NAN in the TEXT column
-    merged_data = merged_data.dropna(subset=['TEXT'])
-
-    merged_data['polarity'] = merged_data['TEXT'].apply(extract_polarity)
-    # merged_data['self_reference'] = merged_data['TEXT'].apply(flag_self_referential)
-    return merged_data
 
 ## END Functions pasted from main - modularization functions ##
 
@@ -353,42 +380,6 @@ def create_embeddings_for_sentences(sentences):
         embeddings = generate_embeddings(sentence)
         embeddings_list.append(embeddings)
     return torch.cat(embeddings_list, dim=0)
-
-def process_augmented_data(in_lines_file, out_file_path, exploded_df_path, embeddings_path):
-    """
-    This function loads the augmented data, splits the answers into individual sentences,
-    and generates embeddings for the answers.
-
-    Parameters:
-    in_lines_file (str): The path to the input file containing the augmented data.
-    out_file_path (str): The path to the output file where the processed data will be saved.
-    exploded_df_path (str): The path to the saved exploded dataframe.
-    embeddings_path (str): The path to the saved embeddings.
-
-    Returns:
-    DataFrame: A pandas DataFrame containing the processed augmented data.
-    """
-    if os.path.exists(exploded_df_path) and os.path.exists(embeddings_path):
-        print("Exploded dataframe and embeddings already exist. Loading...")
-        aug_answers_df = pd.read_csv(exploded_df_path)
-        aug_answers_df['EMB'] = np.load(embeddings_path, allow_pickle=True)
-    else:
-        # Load the augmented data
-        aug_answers_df = generate_answers_df(in_lines_file, out_file_path)
-        print("Augmented answers loaded successfully.")
-
-        # Split the answers into individual sentences
-        aug_answers_df['Text'] = aug_answers_df['Text'].str.split(',')
-        aug_answers_df = aug_answers_df.explode('Text')
-        
-        # Generate embeddings for the answers
-        aug_answers_df['EMB'] = aug_answers_df['Text'].apply(generate_embeddings)
-
-        # Save the exploded dataframe and embeddings
-        aug_answers_df.to_csv(exploded_df_path, index=False)
-        np.save(embeddings_path, aug_answers_df['EMB'])
-
-    return aug_answers_df
 
 
 ## END VECTOR EMBEDDING FUNCTIONS ##
@@ -544,3 +535,23 @@ def calculate_cosine_similarity(post_text_df, aug_answers_df, save_name):
         post_text_df.to_csv(save_name, index=False)
 
     return post_text_df
+
+
+
+## END COSINE SIMILARITY FUNCTIONS ##
+
+## LET'S CLEAN UP AND PUT UNUSED FUNCTIONS IN THIS LAST PART
+# { # UNUSED FUNCTIONS ## 
+
+
+
+
+
+
+
+
+
+
+
+
+## } END UNUSED FUNCTIONS ##
