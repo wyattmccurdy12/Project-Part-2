@@ -447,25 +447,22 @@ def similarity_sum_over_col(persons_and_emotions_df, augmented_exploded_df, ques
     """
     This function reads the persons_and_emotions dataframe and creates answer columns for each of the 21 questions.
     Then for each question, it finds the corresponding answer in the augmented_exploded dataframe and gets the cosine similarity sum.
+    This function is more geared to finding - whether a post is relevant - rather than - whether a post exhibits severe symptoms/suffering.
 
     Parameters:
-    persons_and_emotions_file (str): The path to the persons_and_emotions CSV file.
-    augmented_exploded_file (str): The path to the augmented_exploded CSV file.
+    persons_and_emotions_df (DataFrame): The persons_and_emotions dataframe.
+    augmented_exploded_file (DataFrame): The augmented_exploded dataframe.
 
     Returns:
-    persons_and_emotions_df (pandas.DataFrame): The processed dataframe.
+    persons_and_emotions_df (DataFrame): The processed dataframe.
     """
 
-    # Specify the name of the CSV file
+    # Specify the save name and look it up to see whether its already been created before proceeding
     save_name = f'cosine_similarity_q{question_num}'
 
-    # Check if the CSV file exists
     if os.path.exists(save_name):
-        # If the file exists, load the dataframe from it
         persons_and_emotions_df = pd.read_csv(save_name)
     else:
-        # If the file doesn't exist, perform the calculations
-
         # Load the tokenizer and the model
         tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
         model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
@@ -474,7 +471,6 @@ def similarity_sum_over_col(persons_and_emotions_df, augmented_exploded_df, ques
         persons_and_emotions_df[f'SIM_{question_num}'] = ''
 
         # For each question, find the corresponding answer in the augmented_exploded dataframe and get the cosine similarity sum
-
         for index, row in tqdm(persons_and_emotions_df.iterrows(), total=persons_and_emotions_df.shape[0]):
             corresponding_answer = augmented_exploded_df[(augmented_exploded_df['Question'] == question_num)]
             cs_sum = calculate_similarity_sum(row['TEXT'], corresponding_answer, 'Text', tokenizer, model)
