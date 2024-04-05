@@ -3693,3 +3693,8 @@ cosine_similarity_q18
 cosine_similarity_q19
 cosine_similarity_q20
 cosine_similarity_q21
+tabulated_cleaned_emotionfiltered_trec.csv
+tabulated_cleaned_unfiltered_trec.csv
+tabulated_unfiltered_trec.csv
+augmented_answer_sets.csv
+__pycache__/data_processing_utils.cpython-38.pyc

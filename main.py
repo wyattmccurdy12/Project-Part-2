@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from data_processing_utils import *
-from data_processing_utils import DataPreProcessor as dpp
+from data_processing_utils import DataPreProcessor
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import precision_score
 from tqdm import tqdm
@@ -27,6 +27,7 @@ def main():
 
     # Define the paths to the TREC formatted files
     trec_formatted_files = os.path.join(training_data_dir, 'new_data/')
+    dpp = DataPreProcessor(trec_formatted_files)
 
     print("Tabulating TREC data...")
     trec_df = dpp.trec_csv_from_dir(training_data_dir, trec_formatted_files, 'tabulated_unfiltered_trec.csv')
