@@ -3,6 +3,7 @@ import re
 import numpy as np
 import pandas as pd
 import random 
+from sklearn.metrics import average_precision_score, ndcg_score
 from tqdm import tqdm
 import nltk
 nltk.download('vader_lexicon')
@@ -270,284 +271,213 @@ class DataPreProcessor:
         print("Augmented answer sets processed.\n")
         return aug_answers_df
 
-
-## Functions pasted from main - modularization functions ##
-
-
-
-## END Functions pasted from main - modularization functions ##
-
 ## LANGUAGE PROCESSING FUNCTIONS ##
+## Extract polarity, flag self-referential sentences, and filter positive and neutral sentences
+class LanguageProcessor:
+    def __init__(self):
+        self.sia = SentimentIntensityAnalyzer()
 
-def extract_polarity(text):
-    """
-    Extract the polarity of a text using the VADER sentiment analysis tool.
+    def extract_polarity(self, text):
+        """
+        Extract the polarity of a text using the VADER sentiment analysis tool.
 
-    Args:
-        text (str): The text to analyze.
-    
-    Returns:
-        dict: A dictionary containing the polarity scores. Keys: 'neg', 'neu', 'pos', 'compound'. 
-                                                    negative, neutral, positive, and compound scores.
-    """
+        Args:
+            text (str): The text to analyze.
+        
+        Returns:
+            str: The key ('neg', 'neu', 'pos') corresponding to the maximum polarity score.
+        """
+        polarity = self.sia.polarity_scores(text)
+        pp = polarity.pop('compound') # remove compound score. remains unused
+        keys, values = zip(*polarity.items())
+        max_key = keys[values.index(max(values))]
 
-    sia = SentimentIntensityAnalyzer()
-    polarity = sia.polarity_scores(text)
+        return max_key
 
-    # Get the maximum polarity score, return it and its corresponding key in a tuple
-    pp = polarity.pop('compound') # remove compound score. remains unused
-    keys, values = zip(*polarity.items())
-    max_key = keys[values.index(max(values))]
+    def flag_self_referential(self, text):
+        """
+        Flag self-referential sentences in a text.
 
-    return max_key
+        Args:
+            text (str): The text to analyze.
+        
+        Returns:
+            int: 1 if the text is self-referential, 0 otherwise.
+        """
+        tokens = nltk.word_tokenize(text)
+        pos_tags = nltk.pos_tag(tokens)
 
-def flag_self_referential(text):
-    """
-    Flag self-referential sentences in a text.
+        # Check if the text is self-referential
+        is_self_referential = any(tag == 'PRP' for word, tag in pos_tags)
 
-    Args:
-        text (str): The text to analyze.
-    
-    Returns:
-        int: 1 if the text is self-referential, 0 otherwise.
-    """
-    tokens = nltk.word_tokenize(text)
-    pos_tags = nltk.pos_tag(tokens)
+        return int(is_self_referential)
 
-    # Check if the text is self-referential
-    is_self_referential = any(tag == 'PRP' for word, tag in pos_tags)
+    def filter_positive_and_neutral_sents(self, sentences):
+        """
+        Filter out sentences that are positive, neutral, or non-negative.
 
-    return int(is_self_referential)
-
-def filter_positive_and_neutral_sents(sentences):
-    """
-    Filter out sentences that are positive, neutral, or non-negative.
-
-    Args:
-        sentences (list): A list of sentences to filter.
-    
-    Returns:
-        list: A list of sentences that are negative.
-    """
-    negative_sentences = []
-    for sentence in sentences:
-        sentiment = extract_polarity(sentence)
-        if sentiment == 'neg':
-            negative_sentences.append(sentence)
-    return negative_sentences
-
+        Args:
+            sentences (list): A list of sentences to filter.
+        
+        Returns:
+            list: A list of sentences that are negative.
+        """
+        negative_sentences = []
+        for sentence in sentences:
+            sentiment = self.extract_polarity(sentence)
+            if sentiment == 'neg':
+                negative_sentences.append(sentence)
+        return negative_sentences
 ## END LANGUAGE PROCESSING FUNCTIONS ##
 
 ## VECTOR EMBEDDING FUNCTIONS ##
-## Generate vector embeddings
+## Generate vector embeddings and process them for cosine similarity calculations
+class EmbeddingProcessor:
+    def __init__(self, model_name="sentence-transformers/all-MiniLM-L6-v2"):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModel.from_pretrained(model_name)
 
-def generate_embeddings(text):
-    """
-    Generate vector embeddings for a text using the all-MiniLM-L6-v2 pretrained model.
+    def generate_embeddings(self, text):
+        inputs = self.tokenizer(text, return_tensors='pt', truncation=True, padding=True)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            embeddings = outputs.last_hidden_state.mean(dim=1)
+        return embeddings
 
-    Args:
-        text (str): The text to generate embeddings for.
-    
-    Returns:
-        torch.Tensor: The embeddings for the input text.
-    """
-    # Load the tokenizer and the model
-    tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
-    model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+    def create_embeddings_for_sentences(self, sentences):
+        embeddings_list = []
+        for sentence in sentences:
+            embeddings = self.generate_embeddings(sentence)
+            embeddings_list.append(embeddings)
+        return torch.cat(embeddings_list, dim=0)
 
-    # Tokenize the text
-    inputs = tokenizer(text, return_tensors='pt', truncation=True, padding=True)
-
-    # Generate the embeddings
-    with torch.no_grad():
-        outputs = model(**inputs)
-        embeddings = outputs.last_hidden_state.mean(dim=1)  # Take the mean of the token embeddings as the sentence embedding
-
-    return embeddings
-
-def create_embeddings_for_sentences(sentences):
-    """
-    Generate embeddings for a list of sentences.
-
-    Args:
-        sentences (list): A list of sentences to generate embeddings for.
-    
-    Returns:
-        torch.Tensor: The embeddings for the input sentences.
-    """
-    embeddings_list = []
-    for sentence in sentences:
-        embeddings = generate_embeddings(sentence)
-        embeddings_list.append(embeddings)
-    return torch.cat(embeddings_list, dim=0)
-
-
-## END VECTOR EMBEDDING FUNCTIONS ##
-
-## COSINE SIMILARITY FUNCTIONS ##
-# Maybe not used...
-def calculate_similarity(sentence_1, sentence_2, tokenizer, model):
-    """
-    This function calculates the cosine similarity between the embeddings of two sentences.
-
-    Parameters:
-    sentence_1 (str): The first sentence.
-    sentence_2 (str): The second sentence.
-    tokenizer (transformers.PreTrainedTokenizer): The tokenizer to use.
-    model (transformers.PreTrainedModel): The model to use.
-
-    Returns:
-    cs (float): The cosine similarity between the embeddings of the two sentences.
-    """
-    # Tokenize and get embeddings for the sentences
-    inputs_1 = tokenizer(sentence_1, return_tensors='pt', padding=True, truncation=True)
-    inputs_2 = tokenizer(sentence_2, return_tensors='pt', padding=True, truncation=True)
-    outputs_1 = model(**inputs_1)
-    outputs_2 = model(**inputs_2)
-
-    # Calculate cosine similarity between the embeddings
-    cs = cosine_similarity(outputs_1.last_hidden_state.mean(dim=1).detach().numpy(), 
-                           outputs_2.last_hidden_state.mean(dim=1).detach().numpy())
-
-    return cs[0][0]
-
-
-# Create a function to calculate the sum of cosine similarities between an input text and a dataframe column of answer texts
-def calculate_similarity_sum(input_text, input_df, df_column, tokenizer, model):
-    """
-    This function calculates the sum of cosine similarities between the input text and a dataframe column of answer texts.
-
-    Parameters:
-    input_text (str): The input text.
-    input_df (pandas.DataFrame): The dataframe containing the answer texts.
-    df_column (str): The column in the dataframe containing the answer texts.
-    tokenizer (transformers.PreTrainedTokenizer): The tokenizer to use.
-    model (transformers.PreTrainedModel): The model to use.
-
-    Returns:
-    cs_sum (float): The sum of cosine similarities between the input text and the answer texts.
-    """
-    # Tokenize and get embeddings for the input text
-    inputs_1 = tokenizer(input_text, return_tensors='pt', padding=True, truncation=True)
-    outputs_1 = model(**inputs_1)
-
-    # Calculate cosine similarity between the input text and each answer text
-    cs_sum = 0
-    for answer_text in input_df[df_column]:
-        inputs_2 = tokenizer(answer_text, return_tensors='pt', padding=True, truncation=True)
-        outputs_2 = model(**inputs_2)
+    def calculate_similarity(self, sentence_1, sentence_2):
+        inputs_1 = self.tokenizer(sentence_1, return_tensors='pt', padding=True, truncation=True)
+        inputs_2 = self.tokenizer(sentence_2, return_tensors='pt', padding=True, truncation=True)
+        outputs_1 = self.model(**inputs_1)
+        outputs_2 = self.model(**inputs_2)
         cs = cosine_similarity(outputs_1.last_hidden_state.mean(dim=1).detach().numpy(), 
                                outputs_2.last_hidden_state.mean(dim=1).detach().numpy())
-        cs_sum += cs[0][0]
+        return cs[0][0]
 
-    return cs_sum
+    def calculate_similarity_sum(self, input_text, input_df, df_column):
+        inputs_1 = self.tokenizer(input_text, return_tensors='pt', padding=True, truncation=True)
+        outputs_1 = self.model(**inputs_1)
+        cs_sum = 0
+        for answer_text in input_df[df_column]:
+            inputs_2 = self.tokenizer(answer_text, return_tensors='pt', padding=True, truncation=True)
+            outputs_2 = self.model(**inputs_2)
+            cs = cosine_similarity(outputs_1.last_hidden_state.mean(dim=1).detach().numpy(), 
+                                   outputs_2.last_hidden_state.mean(dim=1).detach().numpy())
+            cs_sum += cs[0][0]
+        return cs_sum
 
+    def similarity_sum_over_col(self, persons_and_emotions_df, augmented_exploded_df, question_num):
+        save_name = f'cosine_similarity_q{question_num}'
+        if os.path.exists(save_name):
+            persons_and_emotions_df = pd.read_csv(save_name)
+        else:
+            persons_and_emotions_df[f'SIM_{question_num}'] = ''
+            for index, row in tqdm(persons_and_emotions_df.iterrows(), total=persons_and_emotions_df.shape[0]):
+                corresponding_answer = augmented_exploded_df[(augmented_exploded_df['Question'] == question_num)]
+                cs_sum = self.calculate_similarity_sum(row['TEXT'], corresponding_answer, 'Text')
+                persons_and_emotions_df.at[index, f'SIM_{question_num}'] = cs_sum
+            persons_and_emotions_df = persons_and_emotions_df.sort_values(by=f'SIM_{question_num}', ascending=False)
+            persons_and_emotions_df.to_csv(save_name, index=False)
+            print(f"Data saved to {save_name}.")
+        return persons_and_emotions_df
 
-def similarity_sum_over_col(persons_and_emotions_df, augmented_exploded_df, question_num):
-    """
-    This function reads the persons_and_emotions dataframe and creates answer columns for each of the 21 questions.
-    Then for each question, it finds the corresponding answer in the augmented_exploded dataframe and gets the cosine similarity sum.
-    This function is more geared to finding - whether a post is relevant - rather than - whether a post exhibits severe symptoms/suffering.
-
-    Parameters:
-    persons_and_emotions_df (DataFrame): The persons_and_emotions dataframe.
-    augmented_exploded_file (DataFrame): The augmented_exploded dataframe.
-
-    Returns:
-    persons_and_emotions_df (DataFrame): The processed dataframe.
-    """
-
-    # Specify the save name and look it up to see whether its already been created before proceeding
-    save_name = f'cosine_similarity_q{question_num}'
-
-    if os.path.exists(save_name):
-        persons_and_emotions_df = pd.read_csv(save_name)
-    else:
-        # Load the tokenizer and the model
-        tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
-        model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
-        
-        # Create answer column for the question and its similarity score
-        persons_and_emotions_df[f'SIM_{question_num}'] = ''
-
-        # For each question, find the corresponding answer in the augmented_exploded dataframe and get the cosine similarity sum
-        for index, row in tqdm(persons_and_emotions_df.iterrows(), total=persons_and_emotions_df.shape[0]):
-            corresponding_answer = augmented_exploded_df[(augmented_exploded_df['Question'] == question_num)]
-            cs_sum = calculate_similarity_sum(row['TEXT'], corresponding_answer, 'Text', tokenizer, model)
-            persons_and_emotions_df.at[index, f'SIM_{question_num}'] = cs_sum
-
-        # Sort the dataframe by similarity
-        persons_and_emotions_df = persons_and_emotions_df.sort_values(by=f'SIM_{question_num}', ascending=False)
-
-        # Save the resulting dataframe to a CSV file
-        persons_and_emotions_df.to_csv(save_name, index=False)
-        print(f"Data saved to {save_name}.")
-
-    return persons_and_emotions_df
-
-# Updating this function. See above
-def calculate_cosine_similarity(post_text_df, aug_answers_df, save_name):
-    """
-    This function calculates the cosine similarity between the embeddings of each row in the incoming posts and the embeddings
-    of each answer in the augmented data where severity is 2, 3, or 4. The results are stored in new columns in
-    the post_text_df.
-
-    If a save_name is provided, the function will attempt to load the dataframe from a CSV file with that name. If the file
-    does not exist, it will perform the calculations and save the resulting dataframe to a CSV file with the provided name.
-
-    Parameters:
-    post_text_df (pandas.DataFrame): The dataframe containing the post texts. It should have a column 'EMB' for embeddings.
-    aug_answers_df (pandas.DataFrame): The dataframe containing the augmented data. It should have a column 'Question' for question numbers,
-                                       a column 'Severity' for severity levels, and a column 'EMB' for embeddings.
-    save_name (str): The name of the CSV file to save to or load from.
-
-    Returns:
-    post_text_df (pandas.DataFrame): The input dataframe with added cosine similarity rank columns.
-    """
-    if os.path.exists(save_name):
-        post_text_df = pd.read_csv(save_name)
-    else:
-        for index, row in tqdm(post_text_df.iterrows(), total=post_text_df.shape[0]):
-            trec_embedding = row['EMB']
-
-            for question_num in range(1, 22):
-                post_text_df[f'cosine_similarity_rank_{question_num}'] = 0
-
-                aug_embeddings = aug_answers_df[(aug_answers_df['Question'] == question_num) 
-                                                & (aug_answers_df['Severity'].isin([2, 3, 4]))]['EMB']
-
-                similarity_sum = 0
-                for aug_embedding in aug_embeddings:
-                    if isinstance(trec_embedding, torch.Tensor):
-                        trec_embedding = trec_embedding.cpu().numpy()
-                    if isinstance(aug_embedding, torch.Tensor):
-                        aug_embedding = aug_embedding.cpu().numpy()
-
-                    similarity = cosine_similarity(trec_embedding.reshape(1, -1), aug_embedding.reshape(1, -1))
-                    similarity_sum += similarity
-
-                post_text_df.at[index, f'cosine_similarity_rank_{question_num}'] = similarity_sum
-
-        post_text_df.to_csv(save_name, index=False)
-
-    return post_text_df
-
-
+    def calculate_cosine_similarity(self, post_text_df, aug_answers_df, save_name):
+        if os.path.exists(save_name):
+            post_text_df = pd.read_csv(save_name)
+        else:
+            for index, row in tqdm(post_text_df.iterrows(), total=post_text_df.shape[0]):
+                trec_embedding = row['EMB']
+                for question_num in range(1, 22):
+                    post_text_df[f'cosine_similarity_rank_{question_num}'] = 0
+                    aug_embeddings = aug_answers_df[(aug_answers_df['Question'] == question_num) 
+                                                    & (aug_answers_df['Severity'].isin([2, 3, 4]))]['EMB']
+                    similarity_sum = 0
+                    for aug_embedding in aug_embeddings:
+                        if isinstance(trec_embedding, torch.Tensor):
+                            trec_embedding = trec_embedding.cpu().numpy()
+                        if isinstance(aug_embedding, torch.Tensor):
+                            aug_embedding = aug_embedding.cpu().numpy()
+                        similarity = cosine_similarity(trec_embedding.reshape(1, -1), aug_embedding.reshape(1, -1))
+                        similarity_sum += similarity
+                    post_text_df.at[index, f'cosine_similarity_rank_{question_num}'] = similarity_sum
+            post_text_df.to_csv(save_name, index=False)
+        return post_text_df
 
 ## END COSINE SIMILARITY FUNCTIONS ##
 
-## LET'S CLEAN UP AND PUT UNUSED FUNCTIONS IN THIS LAST PART
-# { # UNUSED FUNCTIONS ## 
+class PostProcessor:
+    @staticmethod
+    def create_trec_table(cosine_similarity_dfs, system_name, ground_truth_df):
+        """
+        Create a TREC table based on cosine similarity data, for each BDI question.
 
+        Parameters:
+        cosine_similarity_dfs (list): A list of pandas DataFrames containing cosine similarity data - outputs.
+        system_name (str): The name of the system.
+        ground_truth_df (pandas DataFrame): The ground truth DataFrame.
 
+        Returns:
+        pandas DataFrame: The TREC table.
+        """
+        trec_table = pd.DataFrame(columns=['item_number', 'Q0', 'sentence_id', 'position_in_ranking', 'score', 'system_name', 'rel'])
 
+        for i, df in enumerate(cosine_similarity_dfs):
+            top_1000 = df.head(1000)
+            top_1000['item_number'] = i+1
+            sim_col_name = f'SIM_{i+1}'
+            top_1000 = top_1000.rename(columns={
+                'docid': 'sentence_id', 
+                sim_col_name: 'cosine_similarity'})
 
+            top_1000['q0'] = ''
+            top_1000['system_name'] = system_name
+            top_1000 = top_1000[['item_number', 'q0', 'sentence_id', 'cosine_similarity', 'system_name']]
 
+            new_df = top_1000.merge(ground_truth_df, left_on=['item_number', 'sentence_id'], right_on=['query', 'sentence_id'], how='left')
 
+            trec_table = pd.concat([trec_table, new_df])
 
+        trec_table.reset_index(drop=True, inplace=True)
 
+        return trec_table
 
+    @staticmethod
+    def compute_metrics(trec_table):
+        """
+        Compute evaluation metrics for each question in the TREC table.
 
+        Parameters:
+        trec_table (pd.DataFrame): DataFrame containing the top 1000 sentences for each query, 
+                                   along with their cosine similarity scores, system name, and relevance data.
 
+        Returns:
+        pd.DataFrame: A DataFrame where each row corresponds to a question and the columns are the computed metrics.
+        """
+        metrics = []
 
-## } END UNUSED FUNCTIONS ##
+        for i in range(1, 22):
+            rows = trec_table[trec_table['item_number'] == i]
+
+            ap = average_precision_score(rows['rel'], rows['score'])
+
+            r_precision = rows['is_relevant'].sum() / len(rows)
+
+            precision_at_10 = rows['is_relevant'][:10].mean()
+
+            ndcg_at_1000 = ndcg_score(np.asarray([rows['is_relevant']]), np.asarray([rows['score']]))
+
+            metrics.append({
+                'Question': i,
+                'AP': ap,
+                'R-Precision': r_precision,
+                'Precision at 10': precision_at_10,
+                'NDCG at 1000': ndcg_at_1000
+            })
+
+        return pd.DataFrame(metrics)
