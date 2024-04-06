@@ -13,6 +13,7 @@ from transformers import AutoTokenizer, AutoModel
 import torch
 from sklearn.metrics.pairwise import cosine_similarity
 from multiprocessing import Pool
+import multiprocessing as mp
 
 
 ##########################################
@@ -364,14 +365,14 @@ class EmbeddingProcessor:
         Returns:
             float: The sum of cosine similarity scores.
         """
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = self.model.to(device)
+        # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # self.model = self.model.to(device)
 
-        inputs_1 = self.tokenizer(input_text, return_tensors='pt', padding=True, truncation=True).to(device)
+        inputs_1 = self.tokenizer(input_text, return_tensors='pt', padding=True, truncation=True)
         outputs_1 = self.model(**inputs_1)
         cs_sum = 0
         for answer_text in aug_answers_df[df_column]:
-            inputs_2 = self.tokenizer(answer_text, return_tensors='pt', padding=True, truncation=True).to(device)
+            inputs_2 = self.tokenizer(answer_text, return_tensors='pt', padding=True, truncation=True)
             outputs_2 = self.model(**inputs_2)
             cs = cosine_similarity(outputs_1.last_hidden_state.mean(dim=1).detach().cpu().numpy(), 
                                    outputs_2.last_hidden_state.mean(dim=1).detach().cpu().numpy())
@@ -386,7 +387,7 @@ class EmbeddingProcessor:
     def similarity_sum_over_col(self, persons_and_emotions_df, augmented_exploded_df, question_num):
         """
         Calculates the similarity sum over a specific bdi query in the persons_and_emotions_df DataFrame.
-        This takes a long time due to n cosine similarity calculations for each row in the dataframe for the specific question.
+        This function is parallelized to speed up the cosine similarity calculations for each row in the dataframe for the specific question.
 
         Args:
             persons_and_emotions_df (DataFrame): The DataFrame containing persons and emotions data.
@@ -405,8 +406,12 @@ class EmbeddingProcessor:
         else:
             persons_and_emotions_df[f'SIM_{question_num}'] = ''
             corresponding_answer = augmented_exploded_df[(augmented_exploded_df['Question'] == question_num)]
-            with Pool() as p:
-                cs_sums = p.starmap(self.calculate_similarity_for_row, [(row, corresponding_answer) for _, row in persons_and_emotions_df.iterrows()])
+            
+            pool = mp.Pool(mp.cpu_count())
+            cs_sums = pool.starmap(self.calculate_similarity_for_row, [(row, corresponding_answer) for _, row in persons_and_emotions_df.iterrows()])
+            pool.close()
+            pool.join()  # Wait for all processes to finish and clean them up
+            
             persons_and_emotions_df[f'SIM_{question_num}'] = cs_sums
             persons_and_emotions_df = persons_and_emotions_df.sort_values(by=f'SIM_{question_num}', ascending=False)
             persons_and_emotions_df.to_csv(save_name, index=False)

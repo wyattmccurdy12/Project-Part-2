@@ -61,16 +61,17 @@ def main():
     baseline_trec_table = popr.create_trec_table(cosine_similarity_dfs, 'baseline')
 
     # Compute the metrics for the TREC table
+    print("Computing metrics for the TREC table...")
     metrics_majority = popr.compute_metrics(baseline_trec_table, rels_majority_df)
     metrics_consensus = popr.compute_metrics(baseline_trec_table, rels_consensus_df)
 
 
-
-
     # Save metrics to a csv file
-    metrics_df = pd.DataFrame(metrics).T
-    metrics_df.to_csv('metrics.csv')
-    print("Metrics saved to 'metrics.csv'.")
+    metrics_df = pd.DataFrame(metrics_majority).T
+    metrics_df.to_csv('metrics_majority.csv')
+    metrics_df = pd.DataFrame(metrics_consensus).T
+    metrics_df.to_csv('metrics_consensus.csv')
+    print("Metrics saved.")
 
 
     print("Program completed.")
