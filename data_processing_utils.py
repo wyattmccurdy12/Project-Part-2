@@ -350,15 +350,39 @@ class EmbeddingProcessor:
         self.model = AutoModel.from_pretrained(model_name)
 
     def calculate_similarity(self, sentence_1, sentence_2):
-        inputs_1 = self.tokenizer(sentence_1, return_tensors='pt', padding=True, truncation=True)
-        inputs_2 = self.tokenizer(sentence_2, return_tensors='pt', padding=True, truncation=True)
+        """
+        Calculates the similarity between two texts using mini lm model.
+
+        Args:
+            sentence_1 (str): The first sentence.
+            sentence_2 (str): The second sentence.
+
+        Returns:
+            float: The similarity score between the two sentences.
+        """
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model = self.model.to(device)
+
+        inputs_1 = self.tokenizer(sentence_1, return_tensors='pt', padding=True, truncation=True).to(device)
+        inputs_2 = self.tokenizer(sentence_2, return_tensors='pt', padding=True, truncation=True).to(device)
         outputs_1 = self.model(**inputs_1)
         outputs_2 = self.model(**inputs_2)
-        cs = cosine_similarity(outputs_1.last_hidden_state.mean(dim=1).detach().numpy(), 
-                               outputs_2.last_hidden_state.mean(dim=1).detach().numpy())
+        cs = cosine_similarity(outputs_1.last_hidden_state.mean(dim=1).detach().cpu().numpy(), 
+                               outputs_2.last_hidden_state.mean(dim=1).detach().cpu().numpy())
         return cs[0][0]
 
     def calculate_similarity_sum(self, input_text, input_df, df_column):
+        """
+        Calculates the sum of cosine similarity scores between the input text and each answer text in an input dataframe.
+
+        Args:
+            input_text (str): The input text to compare against.
+            input_df (pandas.DataFrame): The input dataframe containing answer texts.
+            df_column (str): The column name in the dataframe that contains the answer texts.
+
+        Returns:
+            float: The sum of cosine similarity scores.
+        """
         inputs_1 = self.tokenizer(input_text, return_tensors='pt', padding=True, truncation=True)
         outputs_1 = self.model(**inputs_1)
         cs_sum = 0
@@ -371,6 +395,20 @@ class EmbeddingProcessor:
         return cs_sum
 
     def similarity_sum_over_col(self, persons_and_emotions_df, augmented_exploded_df, question_num):
+        """
+        Calculates the similarity sum over a specific bdi query in the persons_and_emotions_df DataFrame.
+
+        Args:
+            persons_and_emotions_df (DataFrame): The DataFrame containing persons and emotions data.
+            augmented_exploded_df (DataFrame): The DataFrame containing augmented and exploded data.
+            question_num (int): The question number for which the similarity sum is calculated.
+
+        Returns:
+            DataFrame: The updated persons_and_emotions_df DataFrame with the similarity sum column added.
+
+        Raises:
+            None
+        """
         save_name = f'cosine_similarity_q{question_num}'
         if os.path.exists(save_name):
             persons_and_emotions_df = pd.read_csv(save_name)
@@ -385,27 +423,6 @@ class EmbeddingProcessor:
             print(f"Data saved to {save_name}.")
         return persons_and_emotions_df
 
-    def calculate_cosine_similarity(self, post_text_df, aug_answers_df, save_name):
-        if os.path.exists(save_name):
-            post_text_df = pd.read_csv(save_name)
-        else:
-            for index, row in tqdm(post_text_df.iterrows(), total=post_text_df.shape[0]):
-                trec_embedding = row['EMB']
-                for question_num in range(1, 22):
-                    post_text_df[f'cosine_similarity_rank_{question_num}'] = 0
-                    aug_embeddings = aug_answers_df[(aug_answers_df['Question'] == question_num) 
-                                                    & (aug_answers_df['Severity'].isin([2, 3, 4]))]['EMB']
-                    similarity_sum = 0
-                    for aug_embedding in aug_embeddings:
-                        if isinstance(trec_embedding, torch.Tensor):
-                            trec_embedding = trec_embedding.cpu().numpy()
-                        if isinstance(aug_embedding, torch.Tensor):
-                            aug_embedding = aug_embedding.cpu().numpy()
-                        similarity = cosine_similarity(trec_embedding.reshape(1, -1), aug_embedding.reshape(1, -1))
-                        similarity_sum += similarity
-                    post_text_df.at[index, f'cosine_similarity_rank_{question_num}'] = similarity_sum
-            post_text_df.to_csv(save_name, index=False)
-        return post_text_df
 
 # POST PROCESSING FUNCTIONS - TREC TABLE AND METRICS - Accuracy etc.
 class PostProcessor:
