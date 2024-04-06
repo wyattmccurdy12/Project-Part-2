@@ -349,28 +349,6 @@ class EmbeddingProcessor:
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name)
 
-    def calculate_similarity(self, sentence_1, sentence_2):
-        """
-        Calculates the similarity between two texts using mini lm model.
-
-        Args:
-            sentence_1 (str): The first sentence.
-            sentence_2 (str): The second sentence.
-
-        Returns:
-            float: The similarity score between the two sentences.
-        """
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = self.model.to(device)
-
-        inputs_1 = self.tokenizer(sentence_1, return_tensors='pt', padding=True, truncation=True).to(device)
-        inputs_2 = self.tokenizer(sentence_2, return_tensors='pt', padding=True, truncation=True).to(device)
-        outputs_1 = self.model(**inputs_1)
-        outputs_2 = self.model(**inputs_2)
-        cs = cosine_similarity(outputs_1.last_hidden_state.mean(dim=1).detach().cpu().numpy(), 
-                               outputs_2.last_hidden_state.mean(dim=1).detach().cpu().numpy())
-        return cs[0][0]
-
     def calculate_similarity_sum(self, input_text, input_df, df_column):
         """
         Calculates the sum of cosine similarity scores between the input text and each answer text in an input dataframe.
