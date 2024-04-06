@@ -12,6 +12,8 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 from transformers import AutoTokenizer, AutoModel
 import torch
 from sklearn.metrics.pairwise import cosine_similarity
+from multiprocessing import Pool
+
 
 ##########################################
 ## PREPROCESSING FUNCTIONS ## 
@@ -349,32 +351,41 @@ class EmbeddingProcessor:
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name)
 
-    def calculate_similarity_sum(self, input_text, input_df, df_column):
+    def calculate_similarity_sum(self, input_text, aug_answers_df, df_column):
         """
         Calculates the sum of cosine similarity scores between the input text and each answer text in an input dataframe.
 
         Args:
             input_text (str): The input text to compare against.
-            input_df (pandas.DataFrame): The input dataframe containing answer texts.
+            aug_answers_df (pandas.DataFrame): The input dataframe containing answer texts.
             df_column (str): The column name in the dataframe that contains the answer texts.
 
         Returns:
             float: The sum of cosine similarity scores.
         """
-        inputs_1 = self.tokenizer(input_text, return_tensors='pt', padding=True, truncation=True)
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.model = self.model.to(device)
+
+        inputs_1 = self.tokenizer(input_text, return_tensors='pt', padding=True, truncation=True).to(device)
         outputs_1 = self.model(**inputs_1)
         cs_sum = 0
-        for answer_text in input_df[df_column]:
-            inputs_2 = self.tokenizer(answer_text, return_tensors='pt', padding=True, truncation=True)
+        for answer_text in aug_answers_df[df_column]:
+            inputs_2 = self.tokenizer(answer_text, return_tensors='pt', padding=True, truncation=True).to(device)
             outputs_2 = self.model(**inputs_2)
-            cs = cosine_similarity(outputs_1.last_hidden_state.mean(dim=1).detach().numpy(), 
-                                   outputs_2.last_hidden_state.mean(dim=1).detach().numpy())
+            cs = cosine_similarity(outputs_1.last_hidden_state.mean(dim=1).detach().cpu().numpy(), 
+                                   outputs_2.last_hidden_state.mean(dim=1).detach().cpu().numpy())
             cs_sum += cs[0][0]
+        return cs_sum
+
+
+    def calculate_similarity_for_row(self, row, corresponding_answer):
+        cs_sum = self.calculate_similarity_sum(row['TEXT'], corresponding_answer, 'Text')
         return cs_sum
 
     def similarity_sum_over_col(self, persons_and_emotions_df, augmented_exploded_df, question_num):
         """
         Calculates the similarity sum over a specific bdi query in the persons_and_emotions_df DataFrame.
+        This takes a long time due to n cosine similarity calculations for each row in the dataframe for the specific question.
 
         Args:
             persons_and_emotions_df (DataFrame): The DataFrame containing persons and emotions data.
@@ -392,15 +403,14 @@ class EmbeddingProcessor:
             persons_and_emotions_df = pd.read_csv(save_name)
         else:
             persons_and_emotions_df[f'SIM_{question_num}'] = ''
-            for index, row in tqdm(persons_and_emotions_df.iterrows(), total=persons_and_emotions_df.shape[0]):
-                corresponding_answer = augmented_exploded_df[(augmented_exploded_df['Question'] == question_num)]
-                cs_sum = self.calculate_similarity_sum(row['TEXT'], corresponding_answer, 'Text')
-                persons_and_emotions_df.at[index, f'SIM_{question_num}'] = cs_sum
+            corresponding_answer = augmented_exploded_df[(augmented_exploded_df['Question'] == question_num)]
+            with Pool() as p:
+                cs_sums = p.starmap(self.calculate_similarity_for_row, [(row, corresponding_answer) for _, row in persons_and_emotions_df.iterrows()])
+            persons_and_emotions_df[f'SIM_{question_num}'] = cs_sums
             persons_and_emotions_df = persons_and_emotions_df.sort_values(by=f'SIM_{question_num}', ascending=False)
             persons_and_emotions_df.to_csv(save_name, index=False)
             print(f"Data saved to {save_name}.")
         return persons_and_emotions_df
-
 
 # POST PROCESSING FUNCTIONS - TREC TABLE AND METRICS - Accuracy etc.
 class PostProcessor:
