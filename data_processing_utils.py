@@ -274,6 +274,18 @@ class DataPreProcessor:
 ## LANGUAGE PROCESSING FUNCTIONS ##
 ## Extract polarity, flag self-referential sentences, and filter positive and neutral sentences
 class LanguageProcessor:
+    """
+    Language processing utilities.
+
+    Attributes:
+        sia (SentimentIntensityAnalyzer): An instance of the VADER sentiment analysis tool.
+
+    Methods:
+        extract_polarity: Extracts the polarity of a text using the VADER sentiment analysis tool.
+        flag_self_referential: Flags self-referential sentences in a text.
+        filter_positive_and_neutral_sents: Filters out sentences that are positive, neutral, or non-negative.
+    """
+    
     def __init__(self):
         self.sia = SentimentIntensityAnalyzer()
 
@@ -337,20 +349,6 @@ class EmbeddingProcessor:
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModel.from_pretrained(model_name)
 
-    def generate_embeddings(self, text):
-        inputs = self.tokenizer(text, return_tensors='pt', truncation=True, padding=True)
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            embeddings = outputs.last_hidden_state.mean(dim=1)
-        return embeddings
-
-    def create_embeddings_for_sentences(self, sentences):
-        embeddings_list = []
-        for sentence in sentences:
-            embeddings = self.generate_embeddings(sentence)
-            embeddings_list.append(embeddings)
-        return torch.cat(embeddings_list, dim=0)
-
     def calculate_similarity(self, sentence_1, sentence_2):
         inputs_1 = self.tokenizer(sentence_1, return_tensors='pt', padding=True, truncation=True)
         inputs_2 = self.tokenizer(sentence_2, return_tensors='pt', padding=True, truncation=True)
@@ -409,8 +407,7 @@ class EmbeddingProcessor:
             post_text_df.to_csv(save_name, index=False)
         return post_text_df
 
-## END COSINE SIMILARITY FUNCTIONS ##
-
+# POST PROCESSING FUNCTIONS - TREC TABLE AND METRICS - Accuracy etc.
 class PostProcessor:
     @staticmethod
     def create_trec_table(cosine_similarity_dfs, system_name, ground_truth_df):
