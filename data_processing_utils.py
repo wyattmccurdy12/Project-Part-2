@@ -32,6 +32,7 @@ class DataPreProcessor:
     """
     def __init__(self, trec_dir):
         self.trec_dir = trec_dir
+        self.lp = LanguageProcessor()
 
     def process_trec_file(self, directory, filename):
         """
@@ -200,9 +201,9 @@ class DataPreProcessor:
             df = pd.read_csv(outname)
         else:
             print("Creating predominant polarity column...")
-            df['polarity'] = df['TEXT'].apply(extract_polarity)
+            df['polarity'] = df['TEXT'].apply(self.lp.extract_polarity)
             print("Creating self reference flags...")
-            df['self_ref'] = df['TEXT'].apply(flag_self_referential)
+            df['self_ref'] = df['TEXT'].apply(self.lp.flag_self_referential)
             print("Filtering to only include negative and self referential posts...")
             df = df[(df['polarity'] == 'neg' ) & (df['self_ref'] == 1)]
 
