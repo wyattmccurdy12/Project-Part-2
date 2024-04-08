@@ -16,6 +16,8 @@ from torch.nn.functional import cosine_similarity
 from multiprocessing import Pool
 import multiprocessing as mp
 from sentence_transformers import SentenceTransformer
+from sklearn.metrics import average_precision_score
+from torcheval.metrics.functional import retrieval_precision
 
 ##########################################
 ## PREPROCESSING FUNCTIONS ## 
@@ -400,7 +402,7 @@ class EmbeddingProcessor:
             left_embedding = torch.tensor(self.model.encode([input_text])).to(device)
     
             # Vectorized cosine similarity calculation
-            similarities = F.cosine_similarity(left_embedding[:, None], right_embeddings)
+            similarities = cosine_similarity(left_embedding[:, None], right_embeddings)
     
             # Find max similarity
             max_similarity, _ = torch.max(similarities, dim=1)  # _ for unused index
@@ -499,6 +501,68 @@ class EmbeddingProcessor:
 
 # POST PROCESSING FUNCTIONS - TREC TABLE AND METRICS - Accuracy etc.
 class PostProcessor:
+
+    @staticmethod
+    def assign_correct_class(row):
+        """
+        Assigns the correct class based on the given row.
+
+        Parameters:
+        - row: A pandas DataFrame row containing the 'TEXT' and 'rel' columns.
+
+        Returns:
+        - The assigned class (0 or 1) based on the conditions:
+          - If 'TEXT' is NaN and 'rel' is 1, returns 0.
+          - If 'TEXT' is NaN and 'rel' is not 1, returns 1.
+          - If 'TEXT' is not NaN and 'rel' is 1, returns 1.
+          - If 'TEXT' is not NaN and 'rel' is not 1, returns 0.
+        """
+        if pd.isna(row['TEXT']):
+            if row['rel'] == 1:
+                return 0
+            else:
+                return 1
+        else:
+            if row['rel'] == 1:
+                return 1
+            else:
+                return 0
+            
+
+    def calculate_metrics(merged_df, ranking_column):
+        """
+        Calculates relevant metrics for the given pandas DataFrame.
+
+        Args:
+        merged_df (pandas.DataFrame): The DataFrame containing necessary columns.
+        ranking_column (str, optional): The name of the column containing ranking scores.
+
+        Returns:
+        A dictionary containing calculated metric scores.
+        """
+
+        # Calculate metrics
+        metrics = {}
+
+        # Precision@10
+        metrics['precision_at_10'] = merged_df['correct'].iloc[:10].sum() / 10
+
+        # R-Precision with dropped NaN values
+        # merged_df_for_r = merged_df.dropna(subset=[ranking_column])
+        input = torch.tensor(list(merged_df[ranking_column]))
+        target = torch.tensor(list(merged_df['rel']))
+        metrics['r_precision'] = float(retrieval_precision(input, target))
+
+        # Average Precision
+        # ones_array = np.ones_like(merged_df['correct'])
+        metrics['average_precision'] = average_precision_score(merged_df['pred_rel'], merged_df['rel'])
+
+        # Uncomment for NDGC@1000:
+        # from sklearn.metrics import ndcg_score
+        # metrics['ndcg_1000'] = ndcg_score(ones_array, merged_df['correct'], k=1000)
+
+        return metrics
+
     @staticmethod
     def create_trec_table(cosine_similarity_dfs, system_name, ground_truth_df):
         """
