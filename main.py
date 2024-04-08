@@ -76,8 +76,8 @@ def main():
 
         metrics_dict[f"metrics_q{i}"] = ppr.calculate_metrics(merged_i, col_of_interest)
 
+    ## From here continue with pynb file - will update for final code..
 
-    
 
     # cosine_similarity_dfs = []
     # for i in range(1, 22):
