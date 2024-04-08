@@ -11,10 +11,11 @@ nltk.download('averaged_perceptron_tagger')
 from nltk.sentiment import SentimentIntensityAnalyzer
 from transformers import AutoTokenizer, AutoModel
 import torch
-from sklearn.metrics.pairwise import cosine_similarity
+from torch.nn.functional import cosine_similarity
+# from sklearn.metrics.pairwise import cosine_similarity
 from multiprocessing import Pool
 import multiprocessing as mp
-
+from sentence_transformers import SentenceTransformer
 
 ##########################################
 ## PREPROCESSING FUNCTIONS ## 
@@ -349,10 +350,91 @@ class LanguageProcessor:
 ## VECTOR EMBEDDING FUNCTIONS ##
 ## Generate vector embeddings and process them for cosine similarity calculations
 class EmbeddingProcessor:
+    """
+    A class that handles embedding processing using a pre-trained sentence transformer model.
+
+    Args:
+        model_name (str): The name of the pre-trained sentence transformer model to use. Default is "sentence-transformers/all-MiniLM-L6-v2".
+
+    Attributes:
+        tokenizer (AutoTokenizer): The tokenizer for the sentence transformer model.
+        model (SentenceTransformer): The pre-trained sentence transformer model.
+
+    Methods:
+        calculate_max_similarity(clean_ef_data, augmented_answers): Calculates the maximum similarity between each text in `clean_ef_data` and the augmented answers for each column.
+        calculate_similarity_sum(input_text, aug_answers_df, df_column): Calculates the sum of cosine similarity scores between the input text and each answer text in an input dataframe.
+        calculate_similarity_for_row(row, corresponding_answer): Calculates the similarity sum for a specific row in the dataframe.
+        similarity_sum_over_col(persons_and_emotions_df, augmented_exploded_df, question_num): Calculates the similarity sum over a specific BDI query in the persons_and_emotions_df DataFrame.
+    """
+
     def __init__(self, model_name="sentence-transformers/all-MiniLM-L6-v2"):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModel.from_pretrained(model_name)
+        self.model = SentenceTransformer(model_name)
 
+    # Maximum similarity - currently used
+    def calculate_max_similarity_for_question_n(self, clean_ef_data, augmented_answers, question_num):
+        """
+        Calculates the maximum similarity between each text in `clean_ef_data` and the augmented answers
+        for a specific question number.
+    
+        Args:
+            clean_ef_data (pandas.DataFrame): The DataFrame containing the clean EF data.
+            augmented_answers (pandas.DataFrame): The DataFrame containing the augmented answers.
+            question_num (int): The question number for which the maximum similarity is calculated.
+    
+        Returns:
+            pandas.DataFrame: The updated `clean_ef_data` DataFrame with the maximum similarity values
+            for the specific question number.
+        """
+        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+        input_texts = list(clean_ef_data['TEXT'])
+        col_name = f"max_cs_{question_num}"
+        clean_ef_data[col_name] = -1.0
+    
+        aug_answers = augmented_answers[augmented_answers['Question'] == question_num]
+        aug_answers = aug_answers[augmented_answers['Severity'] > 1]
+        right_inputs = [answer for answer in list(aug_answers['Text'])]
+        right_embeddings = torch.tensor(self.model.encode(right_inputs)).to(device)
+    
+        for i, input_text in tqdm(enumerate(input_texts), total=len(input_texts)):
+            left_embedding = torch.tensor(self.model.encode([input_text])).to(device)
+    
+            # Vectorized cosine similarity calculation
+            similarities = F.cosine_similarity(left_embedding[:, None], right_embeddings)
+    
+            # Find max similarity
+            max_similarity, _ = torch.max(similarities, dim=1)  # _ for unused index
+    
+            # Update clean_ef_data
+            clean_ef_data.loc[i, col_name] = max_similarity.cpu().numpy()
+    
+        return clean_ef_data
+    
+    # Maximum similarity for all questions - currently used
+    def calculate_max_similarity(self, clean_ef_data, augmented_answers, output_csv):
+        """
+        Calculates the maximum similarity between each text in `clean_ef_data` and the augmented answers
+        for each column.
+    
+        Args:
+            clean_ef_data (pandas.DataFrame): The DataFrame containing the clean EF data.
+            augmented_answers (pandas.DataFrame): The DataFrame containing the augmented answers.
+    
+        Returns:
+            pandas.DataFrame: The updated `clean_ef_data` DataFrame with the maximum similarity values
+            for each column.
+        """
+        if output_csv and os.path.exists(output_csv):
+            print(f"Loading data from {output_csv}")
+            similarity_data = pd.read_csv(output_csv)
+        else:
+            for col_idx in range(1, 22):
+                print("Processing column ", col_idx)
+                similarity_data = self.calculate_max_similarity_for_question_n(clean_ef_data, augmented_answers, col_idx)
+
+        return similarity_data
+
+    # Older erroneous functions
     def calculate_similarity_sum(self, input_text, aug_answers_df, df_column):
         """
         Calculates the sum of cosine similarity scores between the input text and each answer text in an input dataframe.
@@ -378,12 +460,9 @@ class EmbeddingProcessor:
                                    outputs_2.last_hidden_state.mean(dim=1).detach().cpu().numpy())
             cs_sum += cs[0][0]
         return cs_sum
-
-
     def calculate_similarity_for_row(self, row, corresponding_answer):
         cs_sum = self.calculate_similarity_sum(row['TEXT'], corresponding_answer, 'Text')
         return cs_sum
-
     def similarity_sum_over_col(self, persons_and_emotions_df, augmented_exploded_df, question_num):
         """
         Calculates the similarity sum over a specific bdi query in the persons_and_emotions_df DataFrame.
