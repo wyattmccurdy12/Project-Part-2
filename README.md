@@ -7,6 +7,8 @@ Following up, I make some modifications to the baseline by running a finetuned d
 The majority of the project code may be found in the jupyter notebooks in the root directory. 
 One limitation for users is that they are currently only configured to run with CUDA-enabled machines. 
 
+The order to run the notebooks is 1. Baseline Run, 2. Post-Baseline Run, 3. Metrics and Comparisons.
+
 ## CSV Files
 
 `tabulated_unfiltered_trec.csv`: This data is all user posts by id, supplied by eRisk organizers and organized into a csv file.
@@ -25,7 +27,7 @@ Files for the second run will be in TSV format - it is generally better practice
 
 `minilm_results.tsv`: "all-Mini-LM-L6-v2" results (our base model) -> trec-formatted output.
 
-`dbue_results.tsv`: "distilbert-base-uncased-emotion" results (non-base model) -> trec-formatted output.
+`distilbert_mod_results.tsv`: "distilbert-base-uncased-emotion" results (non-base model) -> trec-formatted output.
 
 ## Notebooks
 
